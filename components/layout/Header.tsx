@@ -6,7 +6,7 @@ import Link from 'next/link';
 export default function Header() {
   return (
     <header>
-      <div className='container mx-auto px-4 py-2.5 flex justify-between items-center border-b-1 border-b-gray-300'>
+      <div className='container mx-auto px-5 md:px-10 py-2.5 flex justify-between items-center border-b-1 border-b-gray-300'>
         {/* 로고 */}
         <Link href="/" className="font-bold text-xl">
           <div>areumh.me</div>
