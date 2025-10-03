@@ -20,7 +20,7 @@ export default function Header() {
           <Link href="/portfolio" className="text-gray-800 hover:text-gray-500">
             portfolio
           </Link>
-          <button className="flex w-8 h-8 rounded-full justify-center items-center hover:bg-gray-300 cursor-pointer">
+          <button className="flex w-8 h-8 rounded-full justify-center items-center hover:bg-gray-200 cursor-pointer">
             <Moon />
           </button>
         </nav>

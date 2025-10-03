@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import '@/styles/globals.css';
 import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
 
 export const metadata: Metadata = {
   title: '이것저것 블로그',
@@ -14,9 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>
+      <body className="flex flex-col min-h-screen">
         <Header />
-        <main className="container mx-auto px-10 py-8">{children}</main>
+        <main className="container flex-grow mx-auto px-10 py-8">{children}</main>
+        <Footer />
       </body>
     </html>
   );
