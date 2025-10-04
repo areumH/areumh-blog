@@ -39,11 +39,11 @@ pre > code {
 
 /* 인라인 코드 */
 :not(pre) > code {
-  background-color: #f3f4f6;
+  background-color: #374151;
   padding: 0.125rem 0.25rem;
   border-radius: 0.25rem;
   font-size: 0.8em;
-  color: #d2d2d2;
+  color: #ececec;
 }
 
 /* 다크모드 대응 */

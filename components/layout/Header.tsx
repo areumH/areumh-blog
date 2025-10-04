@@ -8,7 +8,7 @@ export default function Header() {
     <header>
       <div className="container mx-auto px-5 md:px-14 py-2.5 flex justify-between items-center border-b border-b-gray-300 dark:border-b-gray-700">
         {/* 로고 */}
-        <a href="/" className="font-bold text-xl">
+        <a href="/" className="font-bold text-xl hover:underline">
           areumh.me
         </a>
 
