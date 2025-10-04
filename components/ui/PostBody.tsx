@@ -14,18 +14,8 @@ export const PostBody = ({ content }: PostBodyProps) => {
         source={content}
         options={{
           mdxOptions: {
-            remarkPlugins: [
-              remarkGfm,
-            ],
-            rehypePlugins: [
-              [
-                // @ts-ignore
-                rehypePrettyCode,
-                {
-                  theme: 'github-dark',
-                },
-              ],
-            ],
+            remarkPlugins: [remarkGfm],
+            rehypePlugins: [rehypePrettyCode],
           },
         }}
       />
