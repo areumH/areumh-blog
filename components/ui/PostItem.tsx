@@ -7,7 +7,7 @@ export default function PostItem({ post }: { post: Post }) {
 
   return (
     <Link href={`/post/${category}/${slug}`}>
-      <div className="flex flex-col w-full px-4 py-4 gap-2 rounded-lg hover:bg-gray-100 cursor-pointer transition">
+      <div className="flex flex-col w-full px-4 py-4 gap-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer transition">
         <div className="flex flex-col gap-1">
           <div className="flex gap-2 items-center">
             <div className="text-2xl truncate">{title}</div>

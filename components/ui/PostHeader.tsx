@@ -5,7 +5,7 @@ export default function PostHeader({ meta }: { meta: Post }) {
   const { title, date, tags, category } = meta;
 
   return (
-    <div className="flex flex-col gap-3 items-center">
+    <div className="flex flex-col gap-2 items-center">
       <div className="max-w-3xl text-4xl font-bold text-center">{title}</div>
       <div className="flex gap-2 text-sm text-gray-600">{tags && tags.map((tag) => <p key={tag}>#{tag}</p>)}</div>
       <div className="flex items-center gap-3">
