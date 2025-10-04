@@ -6,6 +6,6 @@ export interface PostMeta {
 }
 
 export interface Post extends PostMeta {
-  slug: string;
   category: string;
+  slug: string;
 }

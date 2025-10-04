@@ -1,1 +1,58 @@
 @import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+/* prose 문단 간격 조정 */
+.prose p {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.prose ul, .prose li, .prose ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* 코드 블록 스타일 */
+pre {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 1rem;
+}
+
+/* 코드 블록 내부 코드 */
+pre > code {
+  display: block;
+  background: none;
+}
+
+/* 인라인 코드 */
+:not(pre) > code {
+  background-color: #f3f4f6;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0.25rem;
+  font-size: 0.8em;
+  color: #d2d2d2;
+}
+
+/* 다크모드 대응 */
+@media (prefers-color-scheme: dark) {
+  pre {
+    background-color: #22272e !important;
+  }
+
+  :not(pre) > code {
+    background-color: #374151;
+    color: #f3f3f3;
+  }
+}

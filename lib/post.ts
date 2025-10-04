@@ -20,8 +20,8 @@ export function getPostSlugs(): string[] {
   categories.forEach((category) => {
     const files = fs.readdirSync(path.join(postsDirectory, category));
     files.forEach((file) => {
-      if (file.endsWith('.md')) {
-        const slug = path.basename(file, '.md');
+      if (file.endsWith('.mdx')) {
+        const slug = path.basename(file, '.mdx');
         slugs.push(`${category}/${slug}`);
       }
     });
@@ -33,9 +33,9 @@ export function getPostSlugs(): string[] {
 /**
  * 특정 slug의 post 가져오기
  */
-export function getPostBySlug(slug: string) {
-  const [category, fileSlug] = slug.split('/');
-  const fullPath = path.join(postsDirectory, category, `${fileSlug}.md`);
+export function getPostBySlug(url: string) {
+  const [category, slug] = url.split('/');
+  const fullPath = path.join(postsDirectory, category, `${slug}.mdx`);
   const fileContents = fs.readFileSync(fullPath, 'utf8');
 
   const { data, content } = matter(fileContents);
@@ -45,7 +45,7 @@ export function getPostBySlug(slug: string) {
     date: data.date,
     description: data.description,
     tags: data.tags || [],
-    slug: fileSlug,
+    slug,
     category,
   };
 
