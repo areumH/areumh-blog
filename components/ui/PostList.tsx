@@ -2,8 +2,8 @@
 
 import { Post } from '@/types';
 import { useSearchPosts } from '@/hooks/useSearchPosts';
-import SearchBar from './SearchBar';
-import PostItem from './PostItem';
+import SearchBar from '@/components/ui/SearchBar';
+import PostItem from '@/components/ui/PostItem';
 
 export default function PostList({ posts }: { posts: Post[] }) {
   const { searchValue, debouncedSearchValue, setSearchValue, filteredPosts } = useSearchPosts(posts);

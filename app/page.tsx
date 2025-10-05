@@ -1,5 +1,5 @@
-import PostList from '@/components/ui/PostList';
 import { getAllPosts } from '@/lib/post';
+import PostList from '@/components/ui/PostList';
 
 export default function Home() {
   const posts = getAllPosts();

@@ -2,7 +2,7 @@ import { MDXRemote } from 'next-mdx-remote/rsc';
 import rehypePrettyCode from 'rehype-pretty-code';
 import remarkGfm from 'remark-gfm';
 
-export const PostBody = ({ content }: {content: string}) => {
+export default function PostContent({ content }: { content: string }) {
   return (
     <div className="prose prose-lg dark:prose-invert max-w-none">
       <MDXRemote
@@ -16,4 +16,4 @@ export const PostBody = ({ content }: {content: string}) => {
       />
     </div>
   );
-};
+}
