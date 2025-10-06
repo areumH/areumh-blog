@@ -1,6 +1,7 @@
 import { MDXRemote } from 'next-mdx-remote/rsc';
 import rehypePrettyCode from 'rehype-pretty-code';
 import remarkGfm from 'remark-gfm';
+import rehypeSlug from 'rehype-slug';
 
 export default function PostContent({ content }: { content: string }) {
   return (
@@ -10,7 +11,7 @@ export default function PostContent({ content }: { content: string }) {
         options={{
           mdxOptions: {
             remarkPlugins: [remarkGfm],
-            rehypePlugins: [rehypePrettyCode],
+            rehypePlugins: [rehypeSlug, rehypePrettyCode],
           },
         }}
       />

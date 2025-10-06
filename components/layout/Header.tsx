@@ -6,7 +6,7 @@ import ThemeToggle from '@/components/ui/ThemeToggle';
 export default function Header() {
   return (
     <header>
-      <div className="container mx-auto px-5 md:px-14 py-2.5 flex justify-between items-center border-b border-b-gray-300 dark:border-b-gray-700">
+      <div className="w-full max-w-[1250px] mx-auto px-5 md:px-14 py-2.5 flex justify-between items-center border-b border-b-gray-300 dark:border-b-gray-700">
         {/* 로고 */}
         <a href="/" className="font-bold text-xl hover:underline">
           areumh.me

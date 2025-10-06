@@ -9,7 +9,7 @@ export default function PostList({ posts }: { posts: Post[] }) {
   const { searchValue, debouncedSearchValue, setSearchValue, filteredPosts } = useSearchPosts(posts);
 
   return (
-    <>
+    <div className="flex flex-col w-full gap-4 md:gap-6 ">
       <SearchBar value={searchValue} onChange={(e) => setSearchValue(e.target.value)} />
 
       {filteredPosts.length === 0 ? (
@@ -23,6 +23,6 @@ export default function PostList({ posts }: { posts: Post[] }) {
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }

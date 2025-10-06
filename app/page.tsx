@@ -5,7 +5,7 @@ export default function Home() {
   const posts = getAllPosts();
 
   return (
-    <div className="flex flex-col gap-4 md:gap-6 md:px-10">
+    <div className="flex flex-col w-full max-w-[800px] mx-auto items-center md:px-10">
       <PostList posts={posts} />
     </div>
   );
