@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# areumh-blog
 
-## Getting Started
+Next.js 15, React 19, TypeScript로 구축된, MDX 기반 개인 블로그 프로젝트입니다! 
 
-First, run the development server:
+## 주요 기능
+
+- 📝 MDX 기반 블로그 포스팅
+- 🏷️ 카테고리 및 태그 지원
+- 🎨 다크모드 지원 (next-themes)
+- 📑 목차(TOC) 자동 생성
+- 💅 Tailwind CSS 스타일링
+- 🎯 코드 하이라이팅 (rehype-pretty-code)
+
+## 시작하기
+
+### 개발 서버 실행
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 빌드
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run build
+npm start
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 프로젝트 구조
 
-## Learn More
+```
+areumh-blog/
+├── app/             # Next.js App Router 페이지
+│   ├── category/    # 카테고리 페이지
+│   ├── post/        # 블로그 포스트 상세 페이지
+│   └── portfolio/   # 포트폴리오 페이지
+├── components/      # 공통 컴포넌트
+│   ├── layout/      # 레이아웃 컴포넌트
+│   └── ui/          # ui 컴포넌트
+├── hooks/           # 커스텀 훅
+├── lib/             # 블로그 포스트 관련 유틸리티 함수
+├── posts/           # 카테고리별 MDX 블로그 포스트 파일
+├── public/          # 정적 파일
+├── styles/          # 전역 스타일
+├── utils/           # 유틸리티 함수
+└── types.ts         # 타입 정의
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 블로그 포스트 작성
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+`posts/` 폴더 내 카테고리별 폴더에 `.mdx` 파일을 추가하면 자동으로 블로그에 포스트가 생성됩니다.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### 포스트 frontmatter 형식
 
-## Deploy on Vercel
+```mdx
+---
+title: 포스트 제목
+date: 2025-10-04
+description: 포스트 설명
+tags: [tag1, tag2]
+---
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+포스트 내용...
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 기술 스택
+
+- **Framework**: Next.js 15.5.4
+- **Runtime**: React 19.1.0
+- **Language**: TypeScript 5
+- **Styling**: Tailwind CSS 4.1.14
+- **MDX Processing**: next-mdx-remote, gray-matter
+- **Code Highlighting**: rehype-pretty-code
+- **Theme**: next-themes
