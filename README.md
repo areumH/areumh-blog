@@ -1,6 +1,6 @@
 # areumh-blog
 
-Next.js 15, React 19, TypeScript로 구축된, MDX 기반 개인 블로그 프로젝트입니다! 
+Next.js 15, React 19, TypeScript로 구축된 MDX 기반 개인 블로그 프로젝트입니다! 
 
 ## 주요 기능
 

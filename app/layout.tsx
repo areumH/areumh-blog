@@ -5,8 +5,33 @@ import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
 
 export const metadata: Metadata = {
-  title: '이것저것 블로그',
+  title: {
+    default: '이것저것 블로그',
+    template: '%s | 이것저것 블로그',
+  },
   description: 'areumh.me',
+  openGraph: {
+    title: '이것저것 블로그',
+    description: 'areumh.me',
+    url: 'https://areumh.me',
+    siteName: '이것저것 블로그',
+    images: [
+      {
+        url: '/areumh-thumbnail.png',
+        width: 1200,
+        height: 630,
+        alt: '이것저것 블로그',
+      },
+    ],
+    locale: 'ko_KR',
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: '이것저것 블로그',
+    description: 'areumh.me',
+    images: '/areumh-thumbnail.png',
+  },
 };
 
 export default function RootLayout({

@@ -1,3 +1,4 @@
+import { Metadata } from 'next';
 import { getAllPosts, getPostBySlug } from '@/lib/post';
 import PostHeader from '@/components/ui/PostHeader';
 import PostContent from '@/components/ui/PostContent';
@@ -10,6 +11,42 @@ export async function generateStaticParams() {
     category: post.category,
     slug: post.slug,
   }));
+}
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ category: string; slug: string }>;
+}): Promise<Metadata> {
+  const { category, slug } = await params;
+  const { meta } = getPostBySlug(`${category}/${slug}`);
+
+  return {
+    title: meta.title,
+    description: meta.description,
+    openGraph: {
+      title: meta.title,
+      description: meta.description,
+      url: `https://areumh.me/post/${category}/${slug}`,
+      siteName: '이것저것 블로그',
+      images: [
+        {
+          url: '/areumh-thumbnail.png',
+          width: 1200,
+          height: 630,
+          alt: meta.title,
+        },
+      ],
+      locale: 'ko_KR',
+      type: 'article',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: meta.title,
+      description: meta.description,
+      images: '/areumh-thumbnail.png',
+    },
+  };
 }
 
 export default async function Post({ params }: { params: Promise<{ category: string; slug: string }> }) {
