@@ -10,7 +10,7 @@ export default function PostHeader({ meta }: { meta: Post }) {
       <div className="flex gap-2 text-xs md:text-sm text-gray-600">{tags && tags.map((tag) => <p key={tag}>#{tag}</p>)}</div>
       <div className="flex items-center gap-3">
         <div className="text-sm md:text-base text-gray-500">{formatDate(date)}</div>
-        <div className="md:text-lg text-indigo-400">{category}</div>
+        <div className="text-sm md:text-lg text-indigo-400">{category}</div>
       </div>
     </div>
   );
