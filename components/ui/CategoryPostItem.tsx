@@ -14,11 +14,11 @@ export default function CategoryPostItem({ post }: { post: Post }) {
             size={18}
             className="absolute left-0 text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity duration-200 "
           />
-          <span className="ml-0 group-hover:ml-6 transition-all duration-200 truncate group-hover:text-indigo-400">
+          <span className="text-sm md:text-base ml-0 group-hover:ml-6 transition-all duration-200 truncate group-hover:text-indigo-400">
             {title}
           </span>
         </div>
-        <div className="text-sm text-gray-400 whitespace-nowrap">{formatDate(date)}</div>
+        <div className="text-xs md:text-sm text-gray-400 whitespace-nowrap">{formatDate(date)}</div>
       </div>
     </Link>
   );

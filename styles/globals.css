@@ -35,7 +35,13 @@ pre {
 
 code {
   font-family: 'Courier New', Courier, monospace;
-  font-size: 1rem;
+  font-size: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  code {
+    font-size: 0.875rem;
+  }
 }
 
 /* 코드 블록 내부 코드 */
