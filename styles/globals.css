@@ -2,6 +2,19 @@
 @plugin "@tailwindcss/typography";
 @custom-variant dark (&:where(.dark, .dark *));
 
+@font-face {
+  font-family: 'MinSans';
+  src: url('/font/MinSansVF.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* 전역 적용 예시 */
+body {
+  font-family: 'MinSans', sans-serif;
+}
+
 /* prose 문단 간격 조정 */
 .prose p {
   margin-top: 0.5rem;

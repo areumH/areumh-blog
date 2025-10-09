@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     siteName: '이것저것 블로그',
     images: [
       {
-        url: '/areumh-thumbnail.png',
+        url: '/image/areumh-thumbnail.png',
         width: 1200,
         height: 630,
         alt: '카테고리',
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: '카테고리',
     description: 'areumh.me',
-    images: '/areumh-thumbnail.png',
+    images: '/image/areumh-thumbnail.png',
   },
 };
 

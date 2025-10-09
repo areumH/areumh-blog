@@ -1,8 +1,9 @@
 import type { Metadata } from 'next';
-import '@/styles/globals.css';
+import localFont from 'next/font/local';
 import { ThemeProvider } from 'next-themes';
 import Header from '@/components/layout/Header';
 import Footer from '@/components/layout/Footer';
+import '@/styles/globals.css';
 
 export const metadata: Metadata = {
   title: {
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
     siteName: '이것저것 블로그',
     images: [
       {
-        url: '/areumh-thumbnail.png',
+        url: '/image/areumh-thumbnail.png',
         width: 1200,
         height: 630,
         alt: '이것저것 블로그',
@@ -30,7 +31,7 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: '이것저것 블로그',
     description: 'areumh.me',
-    images: '/areumh-thumbnail.png',
+    images: '/image/areumh-thumbnail.png',
   },
 };
 

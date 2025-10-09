@@ -31,7 +31,7 @@ export async function generateMetadata({
       siteName: '이것저것 블로그',
       images: [
         {
-          url: '/areumh-thumbnail.png',
+          url: '/image/areumh-thumbnail.png',
           width: 1200,
           height: 630,
           alt: meta.title,
@@ -44,7 +44,7 @@ export async function generateMetadata({
       card: 'summary_large_image',
       title: meta.title,
       description: meta.description,
-      images: '/areumh-thumbnail.png',
+      images: '/image/areumh-thumbnail.png',
     },
   };
 }
