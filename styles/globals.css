@@ -117,3 +117,8 @@ pre > code {
   background: #e5e7eb;
   border-radius: 5px;
 }
+
+/* 가로 스크롤 숨기기 */
+.horizontal-scroll::-webkit-scrollbar {
+  display: none;
+}

@@ -2,7 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { Post } from '@/types';
-import { useDebounce } from './useDebounce';
+import { useDebounce } from '@/hooks/useDebounce';
 
 export function useSearchPosts(posts: Post[]) {
   const [searchValue, setSearchValue] = useState('');

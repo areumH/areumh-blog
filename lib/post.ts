@@ -53,7 +53,7 @@ export function getPostBySlug(url: string) {
 }
 
 /**
- * 전체 글 목록
+ * 전체 글 목록 가져오기
  */
 export function getAllPosts(): Post[] {
   const slugs = getPostSlugs();
@@ -65,4 +65,13 @@ export function getAllPosts(): Post[] {
  */
 export function getPostsByCategory(category: string): Post[] {
   return getAllPosts().filter((post) => post.category === category);
+}
+
+/**
+ * 전체 태그 목록 가져오기
+ */
+export function getAllTags(): string[] {
+  const posts = getAllPosts();
+  const tags = posts.flatMap((post) => post.tags || []);
+  return Array.from(new Set(tags));
 }
