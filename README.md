@@ -43,6 +43,7 @@ areumh-blog/
 ├── public/          # 정적 파일
 ├── styles/          # 전역 스타일
 ├── utils/           # 유틸리티 함수
+├── constants.ts.    # 상수 정의
 └── types.ts         # 타입 정의
 ```
 
