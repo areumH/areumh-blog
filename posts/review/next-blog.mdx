@@ -1,0 +1,570 @@
+---
+title: 'Next.js로 블로그 만들기 회고'
+date: '2025-10-21'
+description: 'Next.js와 MDX를 이용한 블로그 만들기'
+tags: ['Next.js', 'MDX', '블로그']
+---
+
+항해 부트캠프를 수료한 후 참여한 스터디인 **2주 만에 블로그 만들기** 에 대한 회고...
+크게 내가 고민했던 부분들, 막혔던 부분들 위주로 작성해보려고 한다!!
+
+## 📝 MDX 글 불러오기
+
+개인 블로그 글 포스팅 하는 방법으로 노션에서 불러오기, mdx 파일로 작성하기 등이 있었는데, 평소에 노션을 사용하지 않기도 하고 블로그 관련으로는 레포지토리 하나로 끝내고 싶어서 mdx 파일을 사용하기로 결정했다!
+
+### 카테고리별 글 작성하기
+
+```
+areumh-blog/
+├── app/             # Next.js App Router 페이지
+│   ├── category/    # 카테고리 페이지
+│   ├── post/        # 블로그 포스트 상세 페이지
+│   └── portfolio/   # 포트폴리오 페이지
+├── components/      # 공통 컴포넌트
+│   ├── layout/      # 레이아웃 컴포넌트
+│   └── ui/          # ui 컴포넌트
+├── hooks/           # 커스텀 훅
+├── lib/             # 블로그 포스트 관련 유틸리티 함수
+├── posts/           # 카테고리별 MDX 블로그 포스트 파일
+├── public/          # 정적 파일
+├── styles/          # 전역 스타일
+├── utils/           # 유틸리티 함수
+├── constants.ts     # 상수 정의
+└── types.ts         # 타입 정의
+```
+
+루트 폴더에 `posts`라는 폴더를 생성한 후, 카테고리명으로 폴더를 생성한 뒤 `mdx` 파일을 작성하여 블로그 글을 추가하도록 했다.
+
+```typescript
+// constants.ts
+export const CATEGORIES = [
+  { key: '개발', label: 'tech' },
+  { key: '회고', label: 'review' },
+];
+
+// app/category/page.tsx
+export default function Category() {
+  return (
+    <div className="flex flex-col items-center gap-10 md:px-10 py-3 md:py-5">
+      {CATEGORIES.map(({ key, label }) => (
+        <CategoryPostList key={key} category={label} />
+      ))}
+    </div>
+  );
+}
+```
+
+**카테고리**는 개발과 회고 외에는 딱히 작성할 것 같진 않고... 더 추가한다고 해도 글을 작성할 때 같이 수정하면 그만이라 상수 파일에 정의해두었고, 카테고리명을 인자로 받아 해당 카테고리의 글 목록을 보여주는 `CategoryList` 컴포넌트에 연결해주었다.
+
+```typescript
+import fs from 'fs';
+import path from 'path';
+import matter from 'gray-matter';
+import { Post } from '@/types';
+
+const postsDirectory = path.join(process.cwd(), 'posts');
+
+/**
+ * 모든 slug 가져오기
+ * category - 폴더명, slug - 파일명
+ */
+export function getPostSlugs(): string[] {
+  const categories = fs.readdirSync(postsDirectory).filter((name) => {
+    const categoryPath = path.join(postsDirectory, name);
+    return fs.statSync(categoryPath).isDirectory();
+  });
+
+  const slugs: string[] = [];
+
+  categories.forEach((category) => {
+    const files = fs.readdirSync(path.join(postsDirectory, category));
+    files.forEach((file) => {
+      if (file.endsWith('.mdx')) {
+        const slug = path.basename(file, '.mdx');
+        slugs.push(`${category}/${slug}`);
+      }
+    });
+  });
+
+  return slugs;
+}
+```
+
+`process.cwd()`는 현재 프로젝트의 루트 경로이고, `posts`는 블로그의 글이 담긴 폴더명으로 **postsDirectory**는 `루트 폴더/posts`가 된다.
+
+`fs.readdirSync()`는 해당 폴더 안의 모든 파일/폴더 이름을 동기적으로 가져온다. `fs.statSync()`는 해당 경로의 파일 상태 정보를 담은 `fs.Stats` 객체를 반환하고, `isDirectory()`는 그 경로가 디렉터리인지 아닌지를 알려준다.
+
+따라서 filter는 모든 파일/폴더의 이름 중 폴더의 이름만 걸러주기 때문에 categories는 **카테고리 폴더명만 담고있는 배열을 리턴**한다.
+
+그리고 카테고리 폴더 내부를 탐색하여 `.mdx` 파일만 필터링하고, `path.basename(file, '.mdx')`를 통해 확장자를 제거한다. 이런 과정을 통해 위의 함수는 **`카테고리명/슬러그`의 문자열 배열을 리턴**한다!
+
+### gray-matter로 메타데이터 분리하기
+
+```typescript
+/**
+ * 특정 slug의 post 가져오기
+ */
+export function getPostBySlug(url: string) {
+  const [category, slug] = url.split('/');
+  const fullPath = path.join(postsDirectory, category, `${slug}.mdx`);
+  const fileContents = fs.readFileSync(fullPath, 'utf8');
+
+  const { data, content } = matter(fileContents);
+
+  const meta: Post = {
+    title: data.title,
+    date: data.date,
+    description: data.description,
+    tags: data.tags || [],
+    slug,
+    category,
+  };
+
+  return { meta, content };
+}
+```
+
+`gray-matter` 라이브러리의 matter 함수를 사용하면 **mdx 파일의 상단 메타데이터와 본문을 분리**할 수 있다.
+
+```typescript
+---
+title: "Next.js로 블로그 만들기 회고"
+date: "2025-10-21"
+description: "Next.js와 MDX를 이용한 블로그 만들기"
+tags: ["Next.js", "MDX", "블로그"]
+---
+
+블로그 본문 내용
+```
+
+mdx 파일이 위와 같이 생겼다면 gray-matter은 이를 아래와 같이 반환한다.
+
+```typescript
+{
+  data: {
+    title: "Next.js로 블로그 만들기 회고",
+    date: "2025-10-21",
+    description: "Next.js와 MDX를 이용한 블로그 만들기",
+    tags: ["Next.js", "MDX", "블로그"]
+  },
+  content: "블로그 본문 내용"
+}
+```
+
+이 data 객체를 기반으로 Post라는 타입을 따로 정의하여 카테고리와 슬러그 값을 포함하도록 했고, 블로그 본문의 헤더에 해당 데이터를 사용했다.
+
+### 전체 글 / 카테고리별 글 목록 가져오기
+
+```typescript
+/**
+ * 전체 글 목록 가져오기
+ */
+export function getAllPosts(): Post[] {
+  const slugs = getPostSlugs();
+  return slugs.map((slug) => getPostBySlug(slug).meta).sort((a, b) => (a.date < b.date ? 1 : -1)); // 최신순
+}
+```
+
+블로그의 홈 화면에서는 카테고리에 상관없이 모든 글들을 한번에 보여주도록 했기 때문에 위에 작성했던 함수들을 사용하여 모든 글의 메타데이터를 수집하고 이를 최신순으로 정렬한 배열을 리턴하게 했다!
+
+<br />
+
+```typescript
+/**
+ * 카테고리별 글 가져오기
+ */
+export function getPostsByCategory(category: string): Post[] {
+  return getAllPosts().filter((post) => post.category === category);
+}
+```
+
+그리고 카테고리 페이지에서는 카테고리별 글 목록을 가져오기 때문에 카테고리 문자열을 인자로 받고 해당 카테고리의 글 목록을 리턴하는 함수를 작성했다.
+
+### 태그 목록 가져오기
+
+```typescript
+/**
+ * 전체 태그 목록 가져오기
+ */
+export function getAllTags(): string[] {
+  const posts = getAllPosts();
+  const tags = posts.flatMap((post) => post.tags || []);
+  return Array.from(new Set(tags));
+}
+```
+
+홈 화면에서 태그별 글 목록 확인이 가능하도록 하기 위해 중복을 제거한 태그 목록을 리턴하는 함수도 작성했다.
+
+### params와 Suspense의 비동기 처리
+
+Next 15 부터는 params는 동기가 아닌 **비동기식으로 접근**하도록 변경되었다.
+즉, 라우트 파라미터를 가져오는 과정을 `await` 처리해야 한다.
+
+> 1. 브라우저에서 `/post/review/next-blog` 와 같은 url에 접근
+> 2. `[category]/[slug]` 에 해당하는 동적 파라미터 추출 - 서버 컴포넌트에서 params로 제공 (Promise 형태)
+> 3. `await params`로 실제 객체 `{ category, slug }` 로 변환
+
+```typescript
+export default async function Post({ params }: { params: Promise<{ category: string; slug: string }> }) {
+  const { category, slug } = await params;
+  const { meta, content } = getPostBySlug(`${category}/${slug}`);
+
+  // ...
+}
+```
+
+위의 코드처럼 params의 타입을 `Promise<{ category: string; slug: string }>` 형태로 선언하고, 함수 내부에서 `await`으로 값을 꺼내는 방식으로 작성하여 mdx 파일의 글 데이터를 가져오도록 했다 👍
+
+<br />
+
+```typescript
+export default function Home() {
+  const posts = getAllPosts();
+  const tags = getAllTags();
+
+  return (
+    <div className="flex flex-col w-full max-w-[800px] mx-auto items-center md:px-10">
+      <Suspense fallback={null}>
+        <HomeContent posts={posts} tags={tags} />
+      </Suspense>
+    </div>
+  );
+}
+```
+
+추가로 React 18 이후부터는 `useSearchParams()`를 사용하는 클라이언트 컴포넌트를 데이터가 준비될 때까지 안전하게 렌더링되도록 **`Suspense`로 감싸는 처리**가 필요하다.
+
+`fallback`은 데이터가 로딩 중일 때 보여주는 ui를 지정하는 속성인데, 이번 프로젝트는 페이지가 복잡하지 않고 굳이 로딩 상태 ui가 필요하다고 느껴지지 않아 null 값을 넣어 처리했다. 🫠
+
+## 🎨 MDX 글 스타일링
+
+### next-mdx-remote로 글 렌더링하기
+
+mdx의 블로그 글을 화면에 렌더링하기 위해 `next-mdx-remote`와 여러 플러그인을 활용했다.
+
+```typescript
+import { MDXRemote } from 'next-mdx-remote/rsc';
+import rehypePrettyCode from 'rehype-pretty-code';
+import rehypeSlug from 'rehype-slug';
+import remarkGfm from 'remark-gfm';
+import remarkBreaks from 'remark-breaks';
+
+export default async function PostContent({ content }: { content: string }) {
+  return (
+    <div className="prose prose-sm md:prose-lg dark:prose-invert">
+      <MDXRemote
+        source={content}
+        options={{
+          mdxOptions: {
+            remarkPlugins: [remarkGfm, remarkBreaks],
+            rehypePlugins: [rehypeSlug, rehypePrettyCode],
+          },
+        }}
+      />
+    </div>
+  );
+}
+```
+
+- **remarkGfm**: GitHub 스타일 마크다운 확장(GFM) 적용
+- **remarkBreaks**: 줄바꿈 시 `<br>` 처리
+- **rehypeSlug**: 각 헤딩에 자동으로 id 부여 → 목차(TOC)와 연결
+- **rehypePrettyCode**: 코드 블록 하이라이팅 적용
+
+<br />
+
+```typescript
+// styles/globals.css 중 일부
+@import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+
+/* prose 문단 간격 조정 */
+.prose p {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.prose ul,
+.prose li,
+.prose ol {
+  margin-top: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+/* 인용구 */
+.prose blockquote {
+  border-left: 4px solid #6366f1;
+  padding: 0.5rem;
+  color: #374151;
+  font-style: normal;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  background-color: #f9fafb;
+}
+
+/* 다크모드 대응 */
+.dark .prose blockquote {
+  color: #e5e7eb;
+  background-color: #1f2937;
+}
+
+/* 코드 블록 스타일 */
+pre {
+  padding: 1rem;
+  border-radius: 0.5rem;
+  overflow-x: auto;
+  margin: 0.5rem 0;
+}
+
+code {
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 0.75rem;
+}
+
+@media (min-width: 768px) {
+  code {
+    font-size: 0.875rem;
+  }
+}
+
+// ...
+```
+
+globals.css 파일의 상단에 `@plugin "@tailwindcss/typography";`를 추가하여 [**prose**](https://v1.tailwindcss.com/docs/typography-plugin) 클래스를 사용한 컨텐츠에 스타일이 적용되도록 했다. 그리고 각종 태그들과 인용구, 코드 블록 등에 적용할 스타일들을 직접 작성했다. 🖌️
+
+## 📎 TOC 컴포넌트 구현
+
+블로그 글의 헤딩 (h1, h2, h3)을 기반으로 동적인 목차를 제공하는 컴포넌트를 직접 구현해보았다.
+
+### 글의 모든 헤딩 가져오기
+
+```typescript
+useEffect(() => {
+  const headingElements = Array.from(document.querySelectorAll('h1, h2, h3')) as HTMLElement[];
+
+  const newHeadings = headingElements.map((el) => ({
+    id: el.id,
+    text: el.innerText,
+    level: Number(el.tagName.replace('H', '')),
+  }));
+
+  setHeadings(newHeadings);
+}, []);
+```
+
+`useEffect`를 사용하여 컴포넌트 마운트 시 DOM에서 모든 h1, h2, h3 요소를 가져온다. 그리고 각 헤딩의 id, 텍스트, 레벨(h1일 경우 1, h2일 경우 2 ...)을 추출하여 상태에 저장한다.
+
+### IntersectionObserver로 현재 화면 위치 감지
+
+```typescript
+const observer = new IntersectionObserver(
+  (entries) => {
+    entries.forEach((entry) => {
+      if (entry.isIntersecting) {
+        setCurrentId(entry.target.id);
+      }
+    });
+  },
+  { rootMargin: '0px 0px -80% 0px' }
+);
+```
+
+- **entries**: 관찰 대상 요소들의 상태 배열 (헤딩)
+- **entry.isIntersecting**: 해당 요소가 뷰포트에 보이고 있는지에 대한 boolean 값
+- **entry.target.id**: 관찰 중인 DOM 요소의 id 값
+- **rootMargin**: 관찰 영역(뷰포트)에 여백 설정
+  (bottom: -80% → 화면 아래쪽 80% 지점에서 요소가 들어오면 감지)
+
+### observer 등록
+
+```typescript
+const elements = document.querySelectorAll('h1, h2, h3');
+elements.forEach((el) => observer.observe(el));
+```
+
+`observer.observe(el)`로 각 헤딩을 관찰 대상으로 등록하고, 해당 요소가 화면에 들어오거나 나갈 때 브라우저가 콜백 함수를 자동으로 호출하도록 구현했다.
+
+### 헤딩 스타일링
+
+```typescript
+const getHeadingMargin = (level: number): string => {
+  const indentClass = {
+    1: 'ml-0',
+    2: 'ml-3',
+    3: 'ml-6',
+  } as const;
+
+  return indentClass[level as keyof typeof indentClass] ?? 'ml-0';
+};
+
+// ...
+
+return (
+  <nav className="flex pr-2 text-sm">
+    <ul className="space-y-1">
+      {headings.map((heading) => {
+        return (
+          <li
+            key={heading.id}
+            className={`${getHeadingMargin(heading.level)} ${
+              currentId === heading.id ? 'text-indigo-400 font-semibold' : 'text-gray-400'
+            } transition-colors`}
+          >
+            <a href={`#${heading.id}`}>{heading.text}</a>
+          </li>
+        );
+      })}
+    </ul>
+  </nav>
+);
+```
+
+헤딩 레벨에 따라 TOC 내에 들여쓰기 스타일을 적용하기 위한 함수를 따로 작성해주었고, 현재 화면에 표시된 헤딩의 텍스트 색상을 강조하도록 했다.
+
+```typescript
+html {
+  scroll-behavior: smooth;
+}
+```
+
+추가로 css 파일에 위의 코드를 추가하면 헤딩 클릭 시 애니메이션처럼 부드럽게 스크롤이 이동된다. 하지만 Next.js는 라우트 전환 시 스크롤 동작을 제어하기 위해 **data-scroll-behavior 속성**을 확인하기 때문에 하나의 페이지 내에서 스크롤이 이동될 때는 smooth, 라우트 전환 시엔 auto로 임시 변경 (즉시 스크롤) 되도록 html 태그에 속성 값을 추가해야한다. 하지 않으면 경고문이 뜬다 🤕
+
+<br />
+
+```typescript
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning> // ✅
+      <body className="flex flex-col min-h-screen">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <Header />
+          <main className="flex flex-col flex-grow w-full mx-auto px-7 md:px-20 py-5 md:py-8">{children}</main>
+          <Footer />
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+**`data-scroll-behavior="smooth"`** 코드를 추가하여 해결했다!
+
+## 🌙 다크모드 구현
+
+Tailwind CSS v4부터는 다크모드 설정 방식이 바뀌어서 globals.css 파일에 아래의 코드가 필수로 들어가야 한다.
+
+```typescript
+@custom-variant dark (&:where(.dark, .dark *));
+```
+
+위의 코드가 있어야 `.dark` 클래스가 붙은 요소와 그 하위 요소에 `dark:` 스타일이 적용된다!
+
+### next-themes 설정
+
+```typescript
+// components/ui/ThemeToggle.tsx
+import { Sun, Moon } from 'lucide-react';
+import { useTheme } from 'next-themes';
+
+export default function ThemeToggle() {
+  const { resolvedTheme, setTheme } = useTheme();
+
+  const handleTheme = () => {
+    setTheme(resolvedTheme === 'dark' ? 'light' : 'dark');
+  };
+
+  return (
+    <button
+      className="relative flex w-7 h-7 md:w-8 md:h-8 rounded-full justify-center items-center hover:bg-gray-200 dark:hover:bg-gray-700 cursor-pointer"
+      onClick={handleTheme}
+    >
+      <Sun className="w-5 h-5 md:w-6 md:h-6 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
+      <Moon className="w-5 h-5 md:w-6 md:h-6 absolute rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
+    </button>
+  );
+}
+```
+
+`next-themes`의 **useTheme** 훅으로 현재의 테마 상태를 가져오고, **현재 적용된 실제 테마 값**인 **`resolvedTheme`** 값을 기반으로 테마를 변경하는 **setTheme** 함수를 토글 컴포넌트에 연결해주었다.
+
+<br />
+
+```typescript
+import type { Metadata } from 'next';
+import { ThemeProvider } from 'next-themes';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
+import '@/styles/globals.css';
+
+// ...
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" suppressHydrationWarning>
+      <body className="flex flex-col min-h-screen">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem> // ✅
+          <Header />
+          <main className="flex flex-col flex-grow w-full mx-auto px-7 md:px-20 py-5 md:py-8">{children}</main>
+          <Footer />
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+그리고 루트 레이아웃에 `ThemeProvider`를 추가하여 전역에서 다크모드 토글이 가능하도록 했다 🌙
+
+### suppressHydrationWarning 처리
+
+Next.js는 **SSR(Server-Side Rendering)** 방식을 사용한다.
+
+> 1. 서버에서 HTML을 먼저 생성
+> 2. 브라우저가 HTML을 받아 화면에 표시
+> 3. React가 hydration -> JS를 연결하여 인터렉티브하게 만듦
+
+그로 인해 다크모드를 구현할 때 서버는 사용자의 테마 설정을 모르기 때문에 기본 값 기준으로 HTML을 생성하고, 하이드레이션 과정 중 `next-themes`를 통해 실제로 사용자가 설정한 테마 값을 읽게 되어 이를 기반으로 DOM을 업데이트하여 하이드레이션 불일치 문제가 발생한다.
+
+```typescript
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en" data-scroll-behavior="smooth" suppressHydrationWarning> // ✅
+      <body className="flex flex-col min-h-screen">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <Header />
+          <main className="flex flex-col flex-grow w-full mx-auto px-7 md:px-20 py-5 md:py-8">{children}</main>
+          <Footer />
+        </ThemeProvider>
+      </body>
+    </html>
+  );
+}
+```
+
+이를 해결하기 위해 루트 레이아웃의 html 태그에 하이드레이션 불일치 경고를 허용하는 **suppressHydrationWarning** 속성을 추가했다.
+
+---
+
+> [블로그 바로가기](https://areumh.me/) | [깃허브 바로가기](https://github.com/areumH/areumh-blog)
