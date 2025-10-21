@@ -10,7 +10,10 @@
   font-display: swap;
 }
 
-/* 전역 적용 예시 */
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   font-family: 'MinSans', sans-serif;
 }
@@ -105,7 +108,7 @@ pre > code {
 }
 
 ::-webkit-scrollbar {
-  width: 2px;
+  width: 3px;
 }
 
 ::-webkit-scrollbar-thumb {
