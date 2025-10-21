@@ -44,12 +44,17 @@ body {
 /* 인용구 */
 .prose blockquote {
   border-left: 4px solid #6366f1;
-  padding: 0.5rem;
+  padding: 0.5rem 1rem;
   color: #374151;
   font-style: normal;
   margin-top: 1rem;
   margin-bottom: 1rem;
   background-color: #f9fafb;
+}
+
+.prose blockquote *::before,
+.prose blockquote *::after {
+  content: none !important;
 }
 
 /* 다크모드 대응 */
@@ -59,11 +64,13 @@ body {
 }
 
 /* 코드 블록 스타일 */
+.prose pre,
 pre {
-  padding: 1rem;
+  padding: 0;
   border-radius: 0.5rem;
   overflow-x: auto;
   margin: 0.5rem 0;
+  box-sizing: border-box;
 }
 
 code {
@@ -78,17 +85,22 @@ code {
 }
 
 /* 코드 블록 내부 코드 */
+.prose pre > code,
 pre > code {
   display: block;
   background: none;
+  padding: 1rem !important;
+  width: fit-content;
+  min-width: 100%;
 }
 
 /* 인라인 코드 */
 :not(pre) > code {
   background-color: #374151;
-  padding: 0.125rem 0.3rem;
+  padding: 0.15rem 0.3rem;
   border-radius: 0.25rem;
   font-size: 0.8em;
+  font-weight: 500;
   color: #ececec;
 }
 
