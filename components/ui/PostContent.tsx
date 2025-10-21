@@ -6,7 +6,7 @@ import remarkBreaks from 'remark-breaks';
 
 export default async function PostContent({ content }: { content: string }) {
   return (
-    <div className="prose prose-sm md:prose-lg dark:prose-invert">
+    <div className="prose prose-sm md:prose-lg dark:prose-invert max-w-none">
       <MDXRemote
         source={content}
         options={{
