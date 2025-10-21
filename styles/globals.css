@@ -30,7 +30,7 @@ body {
 .prose h4,
 .prose h5,
 .prose h6 {
-  margin-top: 1rem;
+  margin-top: 1.5rem;
   margin-bottom: 1rem;
 }
 
@@ -108,7 +108,8 @@ pre > code {
 }
 
 ::-webkit-scrollbar {
-  width: 3px;
+  width: 5px; /* 세로 스크롤바 너비 */
+  height: 5px; /* 가로 스크롤바 높이 */
 }
 
 ::-webkit-scrollbar-thumb {
