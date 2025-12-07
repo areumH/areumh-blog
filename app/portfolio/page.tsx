@@ -37,7 +37,9 @@ export default function Portfolio() {
       </div>
       <div className="flex flex-col gap-2 md:gap-3">
         <div className="flex text-2xl md:text-3xl font-bold">About</div>
-        <p className="text-sm md:text-base text-gray-600 dark:text-gray-400">{PORTFOLIO_INFO.about}</p>
+        <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 whitespace-pre-line">
+          {PORTFOLIO_INFO.about}
+        </p>
       </div>
       <div className="flex flex-col gap-2 md:gap-3 w-full">
         <div className="flex text-2xl md:text-3xl font-bold">Education</div>
@@ -117,9 +119,7 @@ export default function Portfolio() {
             className="flex flex-col w-full gap-2 rounded-lg px-4 py-3 border border-gray-300 dark:border-gray-700 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
           >
             <div className="flex justify-between w-full">
-              <p className="text-base md:text-lg font-bold text-gray-700 dark:text-gray-300">
-                {el.name}
-              </p>
+              <p className="text-base md:text-lg font-bold text-gray-700 dark:text-gray-300">{el.name}</p>
               <p className="text-sm md:text-base text-gray-400 dark:text-gray-600">{el.date}</p>
             </div>
             <p className="text-sm md:text-base text-gray-600 dark:text-gray-400">{el.description}</p>
