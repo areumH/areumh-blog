@@ -15,11 +15,13 @@ export default function Toc() {
   useEffect(() => {
     const headingElements = Array.from(document.querySelectorAll('h1, h2, h3')) as HTMLElement[];
 
-    const newHeadings = headingElements.map((el) => ({
-      id: el.id,
-      text: el.innerText,
-      level: Number(el.tagName.replace('H', '')),
-    }));
+    const newHeadings = headingElements
+      .filter((el) => !el.closest('blockquote'))
+      .map((el) => ({
+        id: el.id,
+        text: el.innerText,
+        level: Number(el.tagName.replace('H', '')),
+      }));
 
     setHeadings(newHeadings);
   }, []);
