@@ -54,8 +54,8 @@ export default async function Post({ params }: { params: Promise<{ category: str
   const { meta, content } = getPostBySlug(`${category}/${slug}`);
 
   return (
-    <div className="flex w-full max-w-[800px] mx-auto ">
-      <div className="flex flex-col gap-4 md:gap-6 md:px-10 md:py-5">
+    <div className="flex w-full max-w-[800px] mx-auto">
+      <div className="flex flex-col gap-4 md:gap-6 px-2 md:px-10 py-3 md:py-5 min-w-0 flex-1">
         <PostHeader meta={meta} />
         <div className="border-t border-gray-200"></div>
         <PostContent content={content} />

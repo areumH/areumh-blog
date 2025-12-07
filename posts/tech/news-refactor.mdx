@@ -1,0 +1,409 @@
+---
+title: 클로드 코드에게 개인 프로젝트 리팩토링을 시켜보았다
+date: 2025-12-07
+description: 내 플젝을 구해주세요
+tags: [리팩토링]
+---
+
+<img src="/image/posts/news-refactor/1.png" alt="긍정 뉴스" />
+
+
+예전에 급하게 만들고 그대로 놔뒀던 **뉴스 감정 필터링 프로젝트**를 오랜만에 다시 열어보았다.
+
+최근들어 부정적인 기사가 너무 많은 것 같아 긍정적인 뉴스 기사만 골라볼 수 있는 기능이 있다면 좋겠다는 생각에 시작한 서비스인데, 필요한 기능만 빠르게 만들고 그대로 방치해버려서 일단 급하게 버셀 배포만 한 상태이다.. 늦은 감이 있지만 뒤늦게 리팩토링을 해보려 한다!!!
+
+---
+
+
+## 일단 클로드에게 부탁하기
+우선 나는 클로드 프로를 사용 중이며, 클로드에게 현재 내 프로젝트에 리팩토링할 만한 부분이 있는지 질문해보았다. 
+
+
+> ## 🎯 핵심 리팩토링 포인트
+>### 1️⃣ 높은 우선순위 (즉시 개선 권장)
+>### 1. 에러 핸들링 부재
+>- src/api/search.ts, src/api/sentiment.ts에 `try-catch` 없음
+>- API 실패 시 사용자 피드백 부재
+>### 2. 과도하게 긴 컴포넌트
+>- FilterOption.tsx:19-103 - 여러 기능 혼재
+>- NewsCard.tsx:15-81 - 복잡한 조건부 렌더링
+>- 개선방안: SortDropdown, FilterCheckboxGroup 등으로 분리
+>### 3. useEffect dependency 누락
+>- FilterOption.tsx:36-41
+>```
+>useEffect(() => {
+>  window.addEventListener('click', handleOutsideClick);
+>  return () => window.removeEventListener('click', handleOutsideClick);
+>}, []); // ❌ handleOutsideClick이 dependency에 없음
+>```
+>### 4. 환경변수 접근 분산
+>- interceptor.ts:7-8, sentiment.ts:6에서 각각 접근
+>- 개선방안: `env.ts` 파일로 중앙화
+>### 2️⃣ 중간 우선순위
+>### 5. 중복된 코드 패턴
+>- Spinner 렌더링이 page.tsx:70, page.tsx:83에서 반복
+>- 개선방안: `<LoadingSpinner />` 컴포넌트 생성
+>### 6. Icon 컴포넌트 인터페이스 불일관
+>- SearchIcon, SpinnerIcon, SortIcon, CheckIcon이 각기 다른 props 구조
+>- 개선방안: 공통 IconProps 인터페이스 정의
+>### 7. 타입 정의 개선
+>- news.ts:3 - originallink 필드 미사용
+>- sentiment.ts:9-16 - sentences 배열 타입 부정확
+>### 3️⃣ 낮은 우선순위
+>### 8. 하드코딩된 매직 넘버
+>- page.tsx:48 - Intersection Observer threshold 0.1
+>- 개선방안: 상수로 정의
+>### 9. reactStrictMode 비활성화
+>- next.config.ts:4 - 개발 중 버그 검출 어려움
+
+
+~~너무 많아...~~
+
+여기서 나의 개인적인 판단...
+
+Spinner 컴포넌트의 경우엔 페이지 로딩 / 무한 스크롤 하단 로딩으로 두 가지가 겹친다는 의견이었는데, 역할도 다르고 ui도 달라 중복 로직으로 보기 어려웠다. Icon 컴포넌트 인터페이스의 경우는 각 아이콘마다 기능이 달라 편의를 위해 isOpen, isChecked 등 개별 props를 추가해둔 부분이라 공통 인터페이스 정의의 필요성을 느끼지 못했다. 타입 정의도 api 응답 타입을 그대로 반영한 구조였기에 수정할 필요가 없다고 느꼈다.
+
+
+그래서 간단히 높은 우선순위만 리팩토링을 진행하기로 결심했다!!! 👊
+
+---
+
+
+
+
+## 환경변수 중앙화
+
+네이버 오픈 api와 구글 오픈 api를 사용하는 데에 필요한 민감한 정보인 키 값들을 모두 `env.local` 파일에 작성해뒀는데, 클로드가 환경변수를 중앙화하는 방식을 추천해주었다.
+
+환경변수를 한 파일로 모아서 관리하는 방식은 유지보수성과 안정성을 크게 높여준다고 한다.
+`process.env.KEY`를 직접 접근할 때와 달리 `ENV` 객체로 중앙 집중화하면 `env.ts` 한 곳만 수정하면 되므로 변경 관리가 훨씬 용이해진다.
+
+그리고 중앙화 파일에서 기본값`(|| '')`을 처리하거나 타입을 명확하게 선언해두면 IDE 레벨에서 누락 여부를 빠르게 확인할 수 있고, 환경변수 사용 위치를 명확히 추적하기 쉬워진다.
+
+```typescript
+// src/config/env.ts
+
+/**
+ * 환경변수 중앙 관리
+ * Next.js는 빌드 타임에 process.env.NEXT_PUBLIC_* 변수를 문자열로 치환하므로
+ * 직접 할당하는 방식으로 구현합니다.
+ */
+export const ENV = {
+  // Naver API
+  NAVER_CLIENT_ID: process.env.NEXT_PUBLIC_NAVER_API_CLIENT || '',
+  NAVER_CLIENT_SECRET: process.env.NEXT_PUBLIC_NAVER_API_CLIENT_KEY || '',
+
+  // Google API
+  GOOGLE_API_KEY: process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '',
+} as const;
+```
+
+
+
+
+### Next.js의 빌드 타임 환경변수 처리
+
+```typescript
+function required(key: string) {
+  const value = process.env[key]; // ❌
+  if (!value) {
+    throw new Error(`Missing environment variable: ${key}`);
+  }
+  return value;
+}
+```
+
+위의 코드는 ChatGPT가 만들어준 에러 처리 코드인데, Next.js는 빌드 시 `process.env.NEXT_PUBLIC_API_KEY`를 문자열로 치환하기 때문에 `process.env[key]`와 같은 동적 키 접근을 치환할 수 없다. 결과적으로 런타임에 `undefined`를 반환하게 된다.
+
+Next.js에서는 반드시 정적 키로 접근해야하므로 위의 코드대로 사용하였다!
+
+
+## 컴포넌트 분리
+
+### 여러 기능이 혼재하는 컴포넌트
+
+현재의 FilterOption 컴포넌트는 왼쪽에 정렬 드롭다운 컴포넌트를, 오른쪽에 제목만 / 긍정뉴스 옵션 컴포넌트를 배치하여 동시에 묶여있다. 개발 당시엔 뉴스 목록을 필터링하는 역할을 하나로 묶어 처리할 생각으로 만들었지만 꽤 복잡하게 얽힌 함수들을 보니 역시 분리하는게 맞다는 생각이 들었다.
+
+```typescript
+import { useCallback } from 'react';
+import SortDropdown from './SortDropdown';
+import FilterCheckboxGroup from './FilterCheckboxGroup';
+
+export interface FilterState {
+  sort: 'sim' | 'date';
+  showPositiveOnly: boolean;
+  showTitleOnly: boolean;
+}
+
+export interface FilterOptionProps {
+  filter: FilterState;
+  onChange?: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
+}
+
+const FilterOption = ({ filter, onChange }: FilterOptionProps) => {
+  const handleSortChange = useCallback((sort: 'sim' | 'date') => {
+    onChange?.('sort', sort);
+  }, [onChange]);
+
+  const handleTitleOnlyChange = useCallback((value: boolean) => {
+    onChange?.('showTitleOnly', value);
+  }, [onChange]);
+
+  const handlePositiveOnlyChange = useCallback((value: boolean) => {
+    onChange?.('showPositiveOnly', value);
+  }, [onChange]);
+
+  return (
+    <div className="flex w-full justify-between items-start px-1 sm:px-2 sm:h-20">
+      {/* 정렬 */}
+      <SortDropdown currentSort={filter.sort} onSortChange={handleSortChange} />
+
+      {/* 필터 체크 */}
+      <FilterCheckboxGroup
+        showTitleOnly={filter.showTitleOnly}
+        showPositiveOnly={filter.showPositiveOnly}
+        onTitleOnlyChange={handleTitleOnlyChange}
+        onPositiveOnlyChange={handlePositiveOnlyChange}
+      />
+    </div>
+  );
+};
+
+export default FilterOption;
+```
+
+정렬 컴포넌트와 필터 체크 컴포넌트를 따로 분리해주었고, 각 컴포넌트는 `memo`로 감싸주었다. FilterOption 컴포넌트에서는 각 함수에 `useCallback`을 사용하여 핸들러 함수를 메모이제이션해주었다.
+
+### 조건부 렌더링이 포함된 컴포넌트
+
+뉴스 데이터를 보여주는 `NewsCard` 컴포넌트는 처음에 하나의 컴포넌트 안에서 **뉴스 로딩 상태 / 정상적으로 뉴스가 표시되는 상태 / 부정적인 기사임을 보여주는 상태** 이렇게 3가지의 ui를 모두 처리하고 있었다. 
+
+이를 각 상태에 따라 **NewsCardLoading / NewsCardContent / NewsCardNegative** 컴포넌트로 분리해주었다.
+
+```typescript
+// src/components/NewsCard/index.tsx
+
+export interface NewsCardProps {
+  news?: NewsItem;
+  isTitleOnly: boolean;
+  isPositiveOnly: boolean;
+}
+
+const NewsCard = ({ news, isTitleOnly, isPositiveOnly }: NewsCardProps) => {
+  const newsContent = `${news?.title} ${news?.description}`;
+  const { mutation } = useAnalyzeSentiment(newsContent);
+
+  useEffect(() => {
+    if (mutation.status === 'idle' && !!newsContent.trim()) {
+      mutation.mutate();
+    }
+  }, [mutation, newsContent]);
+
+  const sentimentScore = mutation.data?.documentSentiment.score;
+  const isVisible: boolean = isPositiveOnly ? isPositive(sentimentScore || 0) : true;
+  const isLoading = !news || (mutation.isPending && isPositiveOnly);
+
+  const handleNewsCard = () => {
+    if (!isVisible) return;
+    window.location.href = `${news?.link}`;
+  };
+
+  const renderContent = () => {
+    if (isLoading) {
+      return <NewsCardLoading />;
+    }
+
+    if (isVisible && news) {
+      return <NewsCardContent news={news} isTitleOnly={isTitleOnly} />;
+    }
+
+    return <NewsCardNegative />;
+  };
+
+  return (
+    <button
+      onClick={handleNewsCard}
+      className="flex flex-col w-full p-5 sm:p-7 text-left bg-white rounded-lg outline-1 sm:hover:outline-3 outline-gray-200  hover:outline-indigo-100 cursor-pointer"
+    >
+      {renderContent()}
+    </button>
+  );
+};
+
+export default NewsCard;
+```
+
+감정 분석 api 호출은 최초로 렌더링되는 시점에 `idle` 상태일 때만 실행하도록, 그리고 긍정 필터가 켜져 있으면 로딩 중에도 카드가 클릭되지 않도록 처리했다. NewsCard 컴포넌트는 `renderContent` 함수를 통해 상태를 판별하여 적절한 ui만 선택하여 렌더링하는 역할만 담당하도록 했다!
+
+
+
+### useEffect dependency 누락
+
+```typescript
+// src/components/FilterOption.tsx - 기존 코드
+
+  const handleOutsideClick = () => {
+    setIsSortOpen(false);
+  };
+
+  useEffect(() => {
+    window.addEventListener('click', handleOutsideClick);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick);
+    };
+  }, []);
+```
+
+위의 코드는 정렬 (정확도순/최신순) 필터링 드롭다운 컴포넌트에 연결된 함수이며, 의존성 배열에 함수가 들어가있지 않다. 그리고 전역 click 이벤트로 작성되어있기 때문에 내부 클릭과 외부 클릭을 구분하지 못한다.
+
+```typescript
+// src/components/SortDropdown.tsx - 개선된 코드
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+
+    window.addEventListener('mousedown', handleOutsideClick);
+    return () => {
+      window.removeEventListener('mousedown', handleOutsideClick);
+    };
+  }, []);
+```
+
+그래서 클릭된 위치가 드롭다운 요소 안인지 밖인지 확인하기 `useRef`를 사용하여 외부 클릭만 감지하도록 했다. 그리고 click 대신 `mousedown`을 사용하여 사용자의 액션이 발생했을 때 즉시 반응하도록 했다.
+
+
+
+## 에러 핸들링 처리
+
+지금은 api 요청에 대한 에러 처리가 하나도 되어있지 않은 상태... ~~(왜지?)~~
+api 요청에 실패했을 때 페이지에 토스트 모달을 띄우기 위해 `sonner` 라이브러리를 설치하기로 했다! 
+
+### sonner 라이브러리
+
+```typescript
+// src/app/layout.tsx
+
+import type { Metadata } from 'next';
+import { Toaster } from 'sonner';
+import { pretendard } from '@/styles/font';
+import ReactQueryProvider from '@/providers/ReactQueryProvider';
+import '@/styles/globals.css';
+
+export const metadata: Metadata = {
+  title: 'GJ NEWS',
+  description: '긍정 뉴스만 뽑아보자!',
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html lang="en">
+      <body className={`${pretendard.className} max-w-3xl mx-auto`}>
+        <ReactQueryProvider>{children}</ReactQueryProvider>
+        <Toaster position="top-center" closeButton richColors />
+      </body>
+    </html>
+  );
+}
+```
+
+`sonner` 라이브러리의 토스트 모달을 사용하기 위해선 layout 파일에 `<Toaster />` 을 추가해야한다.
+
+페이지 상단 중앙에 띄우기 위해 `top-center` 속성을 넣었고, 닫기 버튼과 각 상태에 따른 색상을 넣기 위해 `closeButton`과 `richColors` 속성도 추가해주었다!
+
+### QueryClient에서의 에러 처리
+
+
+뉴스 기사를 `useInfiniteQuery`를 통해 무한 스크롤로 가져오고, 각 뉴스에 대한 감정 분석을 위해 `mutation`도 수행하기 때문에 api 요청이 많은 만큼 에러 발생 횟수도 많아 중복되는 에러 메세지를 어떻게 처리할 지 고민이었다. 
+
+React Query v5부터는 useQuery 내부에서 onError가 제거되어서 error 상태를 감지해 useEffect로 토스트 모달을 띄우려 했지만, 무한 스크롤로 페이지를 리패치할 때 에러가 여러 번 동시에 발생하고, 그러면서 감정 분석 mutation이 각 뉴스 카드마다 실행되어 서로 다른 에러가 연속 발생하는 문제가 있었다. 
+
+React Query 관련 문서를 찾아보니, 개별 훅에서 처리하기보단 QueryClient 단에서 onError를 전역적으로 처리하는 방식이 더 권장되는 흐름이었다.
+
+
+```typescript
+'use client';
+
+import { useState } from 'react';
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query';
+import { toast } from 'sonner';
+
+export default function ReactQueryProvider({ children }: { children: React.ReactNode }) {
+  const [queryClient] = useState(
+    () =>
+      new QueryClient({
+        queryCache: new QueryCache({
+          onError: () => {
+            toast.error('요청 처리 중 오류가 발생했습니다.', {
+              id: 'global-error',
+            });
+          },
+        }),
+        mutationCache: new MutationCache({
+          onError: () => {
+            toast.error('요청 처리 중 오류가 발생했습니다.', {
+              id: 'global-error',
+            });
+          },
+        }),
+        defaultOptions: {
+          queries: {
+            retry: 1,
+            refetchOnWindowFocus: false,
+          },
+        },
+      })
+  );
+
+  return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
+}
+```
+
+그래서 위의 코드처럼 `QueryCache`와 `MutationCache`의 onError를 활용해 뉴스 조회 에러 / 감정 분석 에러를 모두 공통 메시지로 통일하기로 했다. 
+
+토스트가 중복으로 생성되는 문제는 Sonner의 `id` 옵션을 활용해 해결했다!! id를 지정하면 여러 요청이 동시에 실패하더라고 토스트는 한 번만 보여진다. 
+
+---
+
+>## 🎉 모든 리팩토링 완료!
+>## ✅ 완료된 모든 작업 총정리:
+>### 높은 우선순위 (완료):
+>### 1. ✅ 환경변수 중앙화 (env.ts)
+>### 2. ✅ FilterOption 대폭 리팩토링 (103줄 → 47줄, 54% 감소)
+>- SortDropdown.tsx 분리
+>- FilterCheckboxGroup.tsx 분리
+>- React.memo + useCallback 성능 최적화
+>- useEffect 외부 클릭 ref 기반 처리
+>### 3. ✅ NewsCard 컴포넌트 분리 (84줄 → 57줄, 32% 감소)
+>- 폴더 구조로 정리 (NewsCard/index.tsx)
+>- 상태별 컴포넌트 분리 (Loading, Content, Negative)
+>### 4. ✅ API 에러 핸들링
+>- React Query 전역 에러 핸들러 (ReactQueryProvider.tsx)
+>- Sonner 토스트 통합
+>- 중복 토스트 방지 (id: 'global-error')
+>### 중간 우선순위 (검토 완료):
+>- Spinner 중복 → 용도가 달라서 현재 상태 유지
+>- Icon 인터페이스 → 각자 다른 용도, 현재가 더 명확
+>- 타입 정의 → API 응답 구조 유지
+>### 낮은 우선순위 (완료):
+>### 1. ✅ 매직 넘버 상수화 (pagination.ts - OBSERVER_THRESHOLD)
+>### 2. ✅ 미사용 import 확인 (실제로는 사용 중)
+>### 📈 최종 성과:
+>- 코드 라인 수: 187줄 감소 (FilterOption 56줄 + NewsCard 27줄 + 기타)
+>- 컴포넌트 분리: 4개 신규 컴포넌트 생성
+>- 성능 최적화: React.memo + useCallback 적용
+>- 에러 처리: 전역 핸들러로 체계화
+>- 코드 품질: 가독성, 재사용성, 유지보수성 대폭 향상
+
+
+
+[깃허브 바로가기](https://github.com/areumH/GJ-NEWS) | [페이지 바로가기](https://gj-news.vercel.app/)
