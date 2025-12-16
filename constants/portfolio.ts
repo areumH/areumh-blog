@@ -1,8 +1,3 @@
-export const CATEGORIES = [
-  { key: '개발', label: 'tech' },
-  { key: '회고', label: 'review' },
-];
-
 export const PORTFOLIO_INFO = {
   name: '한아름',
   about:
@@ -12,6 +7,10 @@ export const PORTFOLIO_INFO = {
     date: '2024.02',
   },
   certification: [
+    {
+      name: 'SQLD (한국데이터산업진흥원)',
+      date: '2025.11',
+    },
     {
       name: 'JLPT N2 (일본국제교육지원협회)',
       date: '2024.12',
@@ -30,7 +29,7 @@ export const PORTFOLIO_INFO = {
     {
       name: '항해99',
       date: '2025.07 ~ 2025.09',
-      link: 'https://stagehanghae99.spartacodingclub.kr/',
+      link: 'https://hanghae99.spartaclub.kr/',
       description: '항해 플러스 프론트엔드 6기 수료',
     },
     {
@@ -51,8 +50,7 @@ export const PORTFOLIO_INFO = {
       name: '요약의 정석: 요정',
       date: '2025.10 ~ 2025.12',
       link: 'https://github.com/Fairy-s-Essentials/yojeong_fe',
-      description:
-        '글을 읽고 요약하는 능력을 체계적으로 훈련할 수 있는 AI 기반 학습 플랫폼',
+      description: '글을 읽고 요약하는 능력을 체계적으로 훈련할 수 있는 AI 기반 학습 플랫폼',
       stack: ['React', 'TypeScript', 'Tailwind CSS', 'React Query', 'Node.js', 'Express'],
     },
     {

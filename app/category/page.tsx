@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { CATEGORIES } from '@/constants';
+import { CATEGORIES } from '@/constants/categories';
 import CategoryPostList from '@/components/ui/CategoryPostList';
 
 export const metadata: Metadata = {

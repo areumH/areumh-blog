@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import { PORTFOLIO_INFO } from '@/constants';
+import { PORTFOLIO_INFO } from '@/constants/portfolio';
 import Chip from '@/components/ui/Chip';
 
 export const metadata: Metadata = {

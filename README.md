@@ -37,13 +37,13 @@ areumh-blog/
 ├── components/      # 공통 컴포넌트
 │   ├── layout/      # 레이아웃 컴포넌트
 │   └── ui/          # ui 컴포넌트
+├── constants/       # 상수 정의
 ├── hooks/           # 커스텀 훅
 ├── lib/             # 블로그 포스트 관련 유틸리티 함수
 ├── posts/           # 카테고리별 MDX 블로그 포스트 파일
 ├── public/          # 정적 파일
 ├── styles/          # 전역 스타일
 ├── utils/           # 유틸리티 함수
-├── constants.ts     # 상수 정의
 └── types.ts         # 타입 정의
 ```
 
