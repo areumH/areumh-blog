@@ -1,0 +1,382 @@
+---
+title: react-hook-form + zod + zustand persist 로 프로젝트 위자드 폼 작성하기
+date: 2026-03-14
+description: ""
+tags: [react, persist, zod, zustand, react-hook-form]
+---
+
+[커밋나우](https://www.commitnow.dev/)의 과제를 진행하면서 프로젝트 위자드 생성 폼을 구현하게 되었다.
+
+새로고침을 해도 폼 입력 값이 유지되어야 한다는 요구사항을 보고 어떻게 구현해야할 지 고민하며 방법을 알아보던 중 `zustand persist`를 알게 되었고, 폼 데이터 자체를 전역 상태로 관리하게 되면서 **키 입력마다 리렌더, 여러 곳에 흩어져버린 검증 로직, 필드 레벨 에러가 없는** 등의 문제가 발생했다 🥲
+
+멘토님께서 리뷰로 **react-hook-form** + **zod** + **zustand** 방식을 추천해주셨고, 해당 방식으로 리팩토링을 진행했다. 그 과정을 글로 남겨보려고 한다!
+
+## zod로 폼 스키마 정의하기
+
+우선 [zod](https://zod.dev/)를 사용하여 프로젝트 폼의 요구사항에 맞게 검증 스키마를 정의했다.
+
+```typescript
+// src/schemas/wizard.ts
+
+import { z } from 'zod';
+import { PROJECT, ERROR, ROLES } from '@/constants';
+
+export const BasicInfoSchema = z.object({
+  name: z.string().min(PROJECT.NAME.MIN, ERROR.NAME).max(PROJECT.NAME.MAX, ERROR.NAME),
+  description: z.string().max(PROJECT.DESCRIPTION.MAX, ERROR.DESCRIPTION),
+  isPublic: z.boolean(),
+});
+
+export const TeamMemberSchema = z.object({
+  teamMembers: z
+    .array(z.object({ userId: z.string(), role: z.enum(ROLES) }))
+    .min(PROJECT.TEAM_MEMBER.MIN, ERROR.TEAM_MEMBER),
+});
+
+export const TechSchema = z.object({
+  techStackIds: z.array(z.string()).min(PROJECT.TECH.MIN, ERROR.TECH),
+});
+
+export const ScheduleSchema = z
+  .object({
+    startDate: z.string().min(1, ERROR.SCHEDULE),
+    endDate: z.string().min(1, ERROR.SCHEDULE),
+    milestones: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string().min(1, ERROR.MILESTONE_NAME),
+        targetDate: z.string().min(1, ERROR.MILESTONE_DATE),
+      }),
+    ),
+  })
+  .superRefine(({ startDate, endDate }, ctx) => {
+    if (startDate && endDate && startDate >= endDate) {
+      ctx.addIssue({ code: 'custom', message: ERROR.START_DATE, path: ['startDate'] });
+      ctx.addIssue({ code: 'custom', message: ERROR.END_DATE, path: ['endDate'] });
+    }
+  });
+
+export type BasicInfoValues = z.infer<typeof BasicInfoSchema>;
+export type TeamMemberValues = z.infer<typeof TeamMemberSchema>;
+export type TechValues = z.infer<typeof TechSchema>;
+export type ScheduleValues = z.infer<typeof ScheduleSchema>;
+```
+
+`.object`, `.array`, `.string` 와 같이 스키마는 단순한 기본 값부터 복잡한 중첩 객체 및 배열에 이르기까지 다양한 데이터 유형을 나타낸다. 그리고 내장 문자열 유효성 검사 및 변환 API를 제공한다.
+
+```typescript
+name: z.string().min(PROJECT.NAME.MIN, ERROR.NAME).max(PROJECT.NAME.MAX, ERROR.NAME);
+```
+
+**min**과 **max** 메서드를 사용하여 데이터의 최소, 최대 길이를 지정할 수 있다.
+두 번째 인자로는 **검증 실패 시 보여줄 에러 메세지 값**을 넘겨준다!
+
+### superRefine
+
+`.superRefine()`을 사용하면 zod의 내부 이슈 유형을 생성할 수 있다.
+
+```typescript
+schema.superRefine((data, ctx) => {
+  // 검증 로직
+});
+```
+
+첫 번째 인자 `data`는 스키마가 파싱한 값 전체이고, 위의 코드에서는 구조 분해로 **`{ startDate, endDate }`** 를 가리킨다.
+두 번째 인자인 `ctx`는 refinement context로 에러를 직접 추가할 수 있는 도구이다.
+
+- **code** : 에러 코드 (custom이 가장 일반적)
+- **message** : 에러 메세지
+- **path** : 어떤 필드에 에러를 연결할 지 지정하는 배열
+
+### infer
+
+`.infer` 유틸리티를 사용하여 해당 스키마의 타입을 추출하고 원하는 대로 사용할 수 있다.
+위의 코드에서 **BasicInfoValues**는 아래와 같은 값을 가진다.
+
+```typescript
+type BasicInfoValues = {
+  name: string;
+  description: string;
+  isPublic: boolean;
+};
+```
+
+이는 react-hook-form의 **useForm**에 연결하여 사용할 수 있다!
+
+## react-hook-form과 연결하기
+
+react-hook-form의 `useForm`, zod의 `zodResolver`을 사용하여 폼 데이터를 다룰 수 있다.
+
+```typescript
+// src/pages/BasicInfoPage.tsx
+
+const { draft, updateDraft } = useWizardStore();
+const { handleNext } = useWizardNavigation();
+
+const {
+  register,
+  handleSubmit,
+  watch,
+  setValue,
+  formState: { errors },
+} = useForm<BasicInfoValues>({
+  resolver: zodResolver(BasicInfoSchema),
+  mode: 'onTouched',
+  defaultValues: {
+    name: draft.name,
+    description: draft.description,
+    isPublic: draft.isPublic,
+  },
+});
+
+const isPublic = watch('isPublic');
+
+
+// 컴포넌트에 함수 연결
+<form
+  id="wizard-step-form"
+  onSubmit={handleSubmit((values) => {
+    updateDraft(values);
+    handleNext();
+  })}
+  className="flex flex-col w-full gap-10"
+>
+  <div className="flex flex-col gap-1">
+    <label className="font-bold px-1">프로젝트 이름</label>
+    <Input
+      placeholder={PLACE_HOLDER.NAME}
+      errorMessage={errors.name?.message}
+      {...register('name', { onChange: (e) => updateDraft({ name: e.target.value }) })}
+    />
+  </div>
+
+  <div className="flex flex-col gap-1">
+    <label className="font-bold px-1">프로젝트 설명</label>
+    <TextArea
+      placeholder={PLACE_HOLDER.DESCRIPTION}
+      errorMessage={errors.description?.message}
+      {...register('description', { onChange: (e) => updateDraft({ description: e.target.value }) })}
+    />
+  </div>
+
+  <div className="flex flex-col w-full gap-1">
+    <label className="font-bold px-1">공개 여부</label>
+    <div className="flex gap-5">
+      <RadioOption
+        name="visibility"
+        value="public"
+        checked={isPublic === true}
+        onChange={() => {
+          setValue('isPublic', true);
+          updateDraft({ isPublic: true });
+        }}
+      >
+        공개
+      </RadioOption>
+      <RadioOption
+        name="visibility"
+        value="private"
+        checked={isPublic === false}
+        onChange={() => {
+          setValue('isPublic', false);
+          updateDraft({ isPublic: false });
+        }}
+      >
+        비공개
+      </RadioOption>
+    </div>
+  </div>
+</form>
+```
+
+### register
+
+입력 필드를 react-hook-form에 등록하는 함수이다.
+`{...register('name')}` 처럼 spread하면 **onChange, onBlur, ref** 등 필요한 이벤트 핸들러가 Input에 자동으로 연결된다.
+
+두 번째 인자는 옵션 객체로, 추가로 실행할 콜백을 끼워 넣을 수 있다.
+즉, 위 코드의 경우엔 필드 값이 바뀔 때 form 내부 상태를 업데이트하면서 **updateDraft** 함수가 동시 실행된다.
+
+### handleSubmit
+
+form의 **onSubmit** 이벤트를 감싸는 래퍼이다.
+내부적으로 zod 스키마 유효성 검사를 먼저 실행하고, 통과하면 콜백(values => ...)을 실행한다.
+실패하면 콜백 호출 없이 **errors**를 업데이트한다.
+
+### watch
+
+특정 필드 값을 **실시간으로 구독**하는 함수이다.
+위의 경우엔 `watch('isPublic')`으로 라디오 버튼의 선택 상태를 읽어 **checked**의 prop에 전달하고, 값이 바뀔 때마다 리렌더링이 트리거된다.
+
+### setValue
+
+코드에서 **직접 특정 필드 값을 설정**한다.
+register로 연결하기 어려운 커스텀 컴포넌트에 사용할 수 있다.
+
+```typescript
+// src/pages/TeamSetupPage.tsx
+
+const setMembers = (updated: TeamMemberValues['teamMembers']) => {
+  setValue('teamMembers', updated, { shouldValidate: true });
+  updateDraft({ teamMembers: updated });
+};
+```
+
+첫 번째 인자는 값을 **업데이트할 필드**, 두 번째 인자는 **설정할 새 값**이다.
+setValue는 기본적으로 값만 바꾸고 유효성 검사를 다시 실행하지 않는데, 세 번째 인자로 `{ shouldValidate: true }`를 넘겨주면 값을 바꾼 직후 즉시 재검사한다.
+
+|      옵션      | 기본값 | 설명                             |
+| :------------: | :----: | -------------------------------- |
+| shouldValidate | false  | 값 변경 후 유효성 검사 즉시 실행 |
+|  shouldDirty   | false  | isDirty, dirtyFields 업데이트    |
+|  shouldTouch   | false  | touchedFields에 해당 필드 추가   |
+
+### formState: \{ errors \}
+
+유효성 검사 실패 시 발생한 에러 메세지를 담는 객체이다.
+`errors.name?.message`처럼 접근하여 사용할 수 있고, 직접 구현한 Input 컴포넌트에 errorMessage를 prop으로 전달하여 컴포넌트 하단에 입력 값에 대한 에러 메세지를 제시하도록 했다.
+
+|     속성      |  타입   | 설명                              |
+| :-----------: | :-----: | --------------------------------- |
+|    errors     | object  | 유효성 검사 실패 시 에러 메세지   |
+|    isValid    | boolean | 모든 필드가 유효한지 여부         |
+|    isDrity    | boolean | 초기값에서 하나라도 변경됐는지    |
+|  dirtyFields  | object  | 변경된 필드 목록                  |
+| isSubmitting  | boolean | 제출 중인지 (비동기 처리 시 유용) |
+|  isSubmitted  | boolean | 한 번이라도 제출을 시도했는지     |
+| touchedFields | object  | 포커스된 적 있는 필드 목록        |
+
+### mode
+
+`mode`는 에러를 언제 보여줄지 결정한다.
+**onTouched**는 **필드에 한 번 포커스 후 벗어난 시점부터 검사를 시작**하므로 처음부터 에러를 노출하지 않아 사용자 경험상 자연스럽다고 판단했다!
+
+|   mode    | 검사 시점                        |
+| :-------: | -------------------------------- |
+| onChange  | 타이핑할 때마다                  |
+|  onBlur   | 포커스 아웃 시                   |
+| onTouched | 첫 포커스 아웃 이후부터 onChange |
+| onSubmit  | 제출 시에만                      |
+
+## zustand + persist 미들웨어로 전역 상태 관리하기
+
+`persist`는 zustand의 미들웨어로 페이지를 새로고침하거나 애플리케이션을 다시 시작해도 스토어의 상태를 유지할 수 있다.
+
+```typescript
+const nextStateCreatorFn = persist(stateCreatorFn, persistOptions);
+```
+
+### stateCreatorFn
+
+`(set, get) => ({ ... })`의 형태로 zustand 스토어의 상태와 액션을 정의하는 함수이다.
+**set**으로 상태를 변경하고, **get**으로 현재 상태를 읽는다.
+
+### persistOptions
+
+**localStorage에 어떻게 저장하고 복원할지**에 대한 설정 객체이다.
+`name`, `version`, `partialize`, `migrate` 등의 속성값이 존재하고, version과 migrate가 존재하지 않으면 앱이 터질 수 있는 위험이 있다.
+
+전역 데이터에 필드를 추가하거나 이름을 바꾸면 기존 사용자의 localStorage에는 옛날 구조의 데이터가 남아있기 때문에, 앱 업데이트 후 이 데이터가 복원될 때 새로 추가한 필드는 **undefined**가 된다.
+이를 방지하기 위해 현재 데이터 구조의 버전 번호인 **version**과 이전 버전 데이터를 새 구조로 변환시켜주는 **migrate**를 꼭 작성해야 한다!
+
+```typescript
+// src/store/useWizardStore.ts
+
+interface WizardStore {
+  draft: ProjectDraft;
+
+  updateDraft: (partial: Partial<ProjectDraft>) => void;
+  isStepValid: (step: WizardStep) => boolean;
+  reset: () => void;
+}
+
+const initialDraft: ProjectDraft = {
+  name: '',
+  description: '',
+  isPublic: true,
+  teamMembers: [],
+  techStackIds: [],
+  startDate: '',
+  endDate: '',
+  milestones: [],
+};
+
+export const useWizardStore = create<WizardStore>()(
+  persist(
+    (set, get) => ({
+      draft: initialDraft,
+
+      updateDraft: (partial) => set((state) => ({ draft: { ...state.draft, ...partial } })),
+      isStepValid: (step) => {
+        const { draft } = get();
+        switch (step) {
+          case 1:
+            return BasicInfoSchema.safeParse(draft).success;
+          case 2:
+            return TeamMemberSchema.safeParse(draft).success;
+          case 3:
+            return TechSchema.safeParse(draft).success;
+          case 4:
+            return ScheduleSchema.safeParse(draft).success;
+          default:
+            return true;
+        }
+      },
+      reset: () => set({ draft: initialDraft }),
+    }),
+    {
+      name: 'wizard-draft',
+      version: 1,
+      partialize: (state) => ({ draft: state.draft }),
+      migrate: (persistedState, version) => {
+        const state = persistedState as { draft?: Partial<ProjectDraft> };
+        if (version === 0) {
+          return { ...state, draft: { ...state.draft, milestones: state.draft?.milestones ?? [] } };
+        }
+        return state;
+      },
+    },
+  ),
+);
+```
+
+위자드 상태 **draft**와 draft의 일부만 받아 기존 값에 병합하는 업데이트 함수 **updateDraft**, 각 스텝의 zod 스키마로 검사해 유효 여부를 반환하는 **isStepValid**, draft를 초기값으로 되돌리는 **reset** 함수로 구성하여 스토어를 생성했다.
+
+`.safeParse`는 zod의 유효성 검사 메서드로 **\{ success, data, error \}** 객체를 반환한다.
+`.parse`를 사용하면 예외가 발생하지만 isStepValid에서는 success 여부만 확인하면 되기 때문에 .safeParse를 사용하여 각 스텝의 검증이 통과되었는지 확인하도록 했다!
+
+## form 바깥의 버튼에 submit 연결하기
+
+페이지마다 이전, 다음 버튼이 존재해야 한다는 과제의 요구 사항에 따라 각 스텝의 form은 Outlet 안에 렌더링되도록 했고, 이전 / 다음 버튼은 layout 컴포넌트에 고정했다. 즉, 버튼과 form이 DOM 상 다른 위치에 존재한다.
+
+일반적으로 `type="submit"` 버튼은 같은 form 안에 있어야 제출을 트리거할 수 있는데, 이 문제를 해결하기 위해 HTML 표준의 form 속성을 사용했다.
+
+```typescript
+// src/layout/WizardLayout.tsx
+
+<Button type="submit" form="wizard-step-form" size="lg" isActive={isStepValid(currentStep)}>
+  다음
+</Button>
+```
+
+버튼의 **form** 속성에 form의 **id**를 지정하면, 위치와 무관하게 해당 form의 **submit** 이벤트를 발생시킬 수 있다.
+다음 버튼 클릭 시 아래의 순서대로 실행된다.
+
+>1. 다음 버튼 클릭 `type="submit", form="wizard-step-form"`
+>2. `<form id="wizard-step-form" onSubmit={...}>` 의 submit 이벤트 발생
+>3. react-hook-form의 handleSubmit 실행
+>4. 유효성 검사 통과 → `(values) => { updateDraft(values); handleNext(); }`
+>5. 유효성 검사 실패 → errors에 에러 채움, 콜백 실행 안 함
+
+```typescript
+// src/layout/WizardLayout.tsx
+
+const { handleSubmit } = useSubmitWizard();
+
+<Button size="lg" onClick={handleSubmit}>
+  프로젝트 생성
+</Button>
+
+```
+
+마지막 스텝에서는 다음 버튼 대신 프로젝트 생성 버튼을 제시하도록 했고, 더 이상 form 유효성 검사가 필요하지 않기 때문에 **onClick** 이벤트에 useWizardForm 훅의 handleSubmit 함수를 연결해주었다.
