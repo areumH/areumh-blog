@@ -1,7 +1,7 @@
 ---
 title: react-hook-form + zod + zustand persist 로 프로젝트 위자드 폼 작성하기
 date: 2026-03-14
-description: ""
+description: ''
 tags: [react, persist, zod, zustand, react-hook-form]
 ---
 
@@ -279,6 +279,8 @@ const nextStateCreatorFn = persist(stateCreatorFn, persistOptions);
 전역 데이터에 필드를 추가하거나 이름을 바꾸면 기존 사용자의 localStorage에는 옛날 구조의 데이터가 남아있기 때문에, 앱 업데이트 후 이 데이터가 복원될 때 새로 추가한 필드는 **undefined**가 된다.
 이를 방지하기 위해 현재 데이터 구조의 버전 번호인 **version**과 이전 버전 데이터를 새 구조로 변환시켜주는 **migrate**를 꼭 작성해야 한다!
 
+추가로 **partialize** 없이 persist를 사용하면 store 전체를 localStorage에 저장하게 된다. 만약 store에 draft 외에 다른 상태가 추가될 경우 의도치 않은 동작이 생겨날 수 있다. 그러므로 partialize를 사용하여 저장할 데이터를 명시적으로 지정하는 과정이 필요하다!
+
 ```typescript
 // src/store/useWizardStore.ts
 
@@ -362,11 +364,11 @@ export const useWizardStore = create<WizardStore>()(
 버튼의 **form** 속성에 form의 **id**를 지정하면, 위치와 무관하게 해당 form의 **submit** 이벤트를 발생시킬 수 있다.
 다음 버튼 클릭 시 아래의 순서대로 실행된다.
 
->1. 다음 버튼 클릭 `type="submit", form="wizard-step-form"`
->2. `<form id="wizard-step-form" onSubmit={...}>` 의 submit 이벤트 발생
->3. react-hook-form의 handleSubmit 실행
->4. 유효성 검사 통과 → `(values) => { updateDraft(values); handleNext(); }`
->5. 유효성 검사 실패 → errors에 에러 채움, 콜백 실행 안 함
+> 1.  다음 버튼 클릭 `type="submit", form="wizard-step-form"`
+> 2.  `<form id="wizard-step-form" onSubmit={...}>` 의 submit 이벤트 발생
+> 3.  react-hook-form의 `handleSubmit` 실행
+> 4.  유효성 검사 통과 → `(values) => { updateDraft(values); handleNext(); }`
+> 5.  유효성 검사 실패 → errors에 에러 채움, 콜백 실행 안 함
 
 ```typescript
 // src/layout/WizardLayout.tsx
