@@ -22,10 +22,11 @@ export default function TagList({ tags }: { tags: string[] }) {
 
       {tags.map((tag) => {
         const isActive = selectedTag === tag;
+        
         return (
           <Link
             key={tag}
-            href={`?tag=${encodeURIComponent(tag)}`}
+            href={isActive ? '/' : `?tag=${encodeURIComponent(tag)}`}
             className={`flex-shrink-0 px-3 py-1 text-sm md:text-base rounded-full border transition-colors ${
               isActive
                 ? 'bg-indigo-500 text-white border-indigo-500'
