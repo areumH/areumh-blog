@@ -1,0 +1,251 @@
+---
+title: 개인 프로젝트를 next v16으로 마이그레이션하기
+date: 2026-03-21
+description: 그리고 리팩토링하기
+tags: [next.js, 리팩토링]
+---
+
+<img src="/image/posts/news-migration/1.png" alt="긍정 뉴스" />
+
+## 서버 컴포넌트 마이그레이션
+
+기존 `search/page.tsx`는 전체가 `'use client'`였다. 이는 다음 문제를 야기한다.
+
+> - 첫 페이지 데이터를 브라우저에서 fetch → 초기 로딩 느림
+> - API 키가 `NEXT_PUBLIC_`으로 브라우저에 노출
+> - Google API를 브라우저에서 직접 호출 → Referer 차단 이슈
+
+CSR로만 구현하면 초기 로딩 시 빈 화면이 잠깐 노출되거나 초기 로딩이 느린 이슈가 생길 수 있다. 이번 업데이트된 기능들을 사용하여 첫 페이지는 서버 컴포넌트, 두 번째 페이지부터는 클라이언트에서 가져오도록 마이그레이션하기로 했다!
+
+### 서버 컴포넌트 vs 클라이언트 컴포넌트
+
+|                         | 서버 컴포넌트 | 클라이언트 컴포넌트 |
+| :---------------------: | :-----------: | :-----------------: |
+|        실행 위치        |     서버      |      브라우저       |
+|      JS 번들 포함       |       X       |          O          |
+|      브라우저 API       |       X       |          O          |
+|    DB/API 직접 접근     |       O       |          X          |
+| `useState`, `useEffect` |       X       |          O          |
+|        선언 방법        |    기본값     | `'use client'` 명시 |
+
+### use cache
+
+`'use cache'`는 Next.js 16에서 정식 도입된 캐싱 문법이다. 함수 상단에 선언하면 동일한 인자로 호출 시 캐시된 결과를 반환한다. 기존 fetch의 cache 옵션은 fetch 단위에서만 동작하지만, `'use cache'`는 어떤 비동기 함수에도 적용할 수 있다. **next.config.ts**에서 `cacheComponents: true` 활성화가 필요하다.
+
+```typescript
+// api/serverSearch.ts
+
+export const fetchNewsFirstPage = async (query: string, sort: string): Promise<NewsResponse> => {
+  'use cache'; // 같은 query + sort 조합이면 재요청 없이 캐시 반환
+
+  const res = await fetch(
+    `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=20&start=1&sort=${sort}`,
+    {
+      headers: {
+        'X-Naver-Client-Id': process.env.NEXT_PUBLIC_NAVER_API_CLIENT!,
+        'X-Naver-Client-Secret': process.env.NEXT_PUBLIC_NAVER_API_CLIENT_KEY!,
+      },
+    },
+  );
+
+  return res.json();
+};
+```
+
+이 데이터는 HTML에 직접 포함되어 내려오므로, 사용자는 JS 번들이 로드되기 전에도 첫 20개의 뉴스를 볼 수 있다. 서버 컴포넌트는 이를 initialData로 클라이언트 컴포넌트에 전달한다.
+
+```typescript
+// app/search/page.tsx
+
+export default async function Search({
+  searchParams,
+}: {
+  searchParams: Promise<{ query?: string; sort?: 'sim' | 'date' }>;
+}) {
+  const { query = '', sort = 'sim' } = await searchParams;
+  const initialData = query ? await fetchNewsFirstPage(query, sort) : null;
+
+  return <NewsSearchClient query={query} sort={sort} initialData={initialData} />;
+}
+
+```
+
+NewsSearchClient 컴포넌트는 initialData를 useNewsListQuery 훅에 넘기는데, 내부적으로 TanStack Query의 **useInfiniteQuery**가 이 데이터를 첫 번째 페이지의 캐시로 등록한다. 덕분에 하이드레이션 후에도 불필요한 재요청이 발생하지 않는다.
+
+### route handler
+
+route handler는 v16 업데이트 내용은 아니지만, 파라미터로 key 값을 넘겨줘야 하기 때문에 브라우저에 해당 값이 노출되던 기존 google api 호출 방식의 문제를 해결하기 위해 도입했다.
+
+`app/api/*/route.ts` 파일로 만드는 서버 전용 API 엔드포인트다. 브라우저가 외부 API를 직접 호출하는 대신 서버를 거치도록 중간 역할을 한다.
+
+**디렉토리 경로가 곧 URL의 경로**이며, `route.ts`라는 이름 자체가 이 **경로의 핸들러**라는 뜻이 된다.
+
+```tsx
+app/api/sentiment/route.ts
+         ↓
+URL: /api/sentiment
+```
+
+그리고 export된 함수의 이름이 **HTTP의 메서드**가 된다.
+
+```tsx
+export async function GET()    → GET  /api/sentiment
+export async function POST()   → POST /api/sentiment
+export async function DELETE() → DELETE /api/sentiment
+```
+
+```typescript
+// app/api/sentiment/route.ts
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const key = process.env.GOOGLE_API_KEY; // 서버에만 존재하는 환경변수
+
+  const res = await fetch(`https://language.googleapis.com/v2/documents:analyzeSentiment?key=${key}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+
+  return NextResponse.json(await res.json(), { status: res.status });
+}
+
+// api/sentiment.ts
+
+export const postAnalyzeSentiment = async (text: string) => {
+  const { data } = await axios.post<SentimentResponse>('/api/sentiment', {
+    encodingType: 'UTF8',
+    document: {
+      type: 'PLAIN_TEXT',
+      content: text,
+    },
+  });
+
+  return data;
+};
+```
+
+route handler를 두어 google api 호출을 서버로 옮겼다. API 키는 env 파일에서 읽어오므로 클라이언트에 노출되지 않는다!
+
+<img src="/image/posts/news-migration/2.png" alt="route handler 변경 전" />
+
+<img src="/image/posts/news-migration/3.png" alt="route handler 변경 후" />
+
+```typescript
+// 변경 전 구조
+
+브라우저
+└── search/page.tsx ('use client')
+    ├── useSearchParams()
+    ├── useInfiniteQuery() → axios → /naver-api → Naver API
+    └── NewsCard
+        └── axios → /google-api → Google API
+            └── NEXT_PUBLIC_GOOGLE_API_KEY (브라우저에 노출)
+```
+
+```typescript
+// 변경 후 구조
+
+서버
+└── search/page.tsx (서버 컴포넌트)
+    ├── searchParams prop으로 query, sort 수신
+    ├── fetchNewsFirstPage() — "use cache"
+    │   └── fetch → Naver API 직접 호출
+    └── <NewsSearchClient initialData={...} />
+
+브라우저
+└── NewsSearchClient.tsx ('use client')
+    ├── useInfiniteQuery() — initialData로 첫 페이지 수신
+    ├── 2페이지~ → axios → /naver-api rewrite → Naver API
+    ├── sort 변경 → router.push → URL 업데이트 → 서버 재렌더
+    └── NewsCard
+        └── POST /api/sentiment (Route Handler)
+            └── fetch → Google API
+                └── GOOGLE_API_KEY (서버에만 존재)
+```
+
+## proxy.ts
+
+Next.js 16에서 `middleware.ts` 컨벤션이 `proxy.ts`로 변경됐다. 파일명과 export 함수명 모두 **proxy**로 바꿔야 한다.
+
+```tsx
+// src/proxy.ts
+
+import { NextRequest, NextResponse } from 'next/server';
+
+export function proxy(req: NextRequest) {
+  const { searchParams } = req.nextUrl;
+
+  if (!searchParams.get('query')?.trim()) {
+    return NextResponse.redirect(new URL('/', req.url));
+  }
+}
+
+export const config = {
+  matcher: '/search',
+};
+```
+
+`/search?query=` 없이 접근하면 `/`로 리다이렉트한다. 서버에서 요청을 가로채기 때문에 페이지가 렌더링되기 전에 처리된다.
+
+## 추가 리팩토링
+
+긍정 / 부정 / 분석 중 3-상태 렌더링 뉴스 카드 컴포넌트의 리팩토링을 진행했다. 기존에는 `renderContent()` 함수 안에서 if/else로 3가지 상태를 처리했고, 감정 분석 호출에 useMutation + useEffect 구조를 사용했다.
+
+```typescript
+// 변경 전
+// NewsCard/index.tsx
+
+const { mutation } = useAnalyzeSentiment(newsContent);
+
+useEffect(() => {
+  if (mutation.status === 'idle' && !!newsContent.trim()) {
+    mutation.mutate();
+  }
+}, [mutation, newsContent]);
+
+const renderContent = () => {
+  if (isLoading) return <NewsCardLoading />;
+  if (isVisible && news) return <NewsCardContent ... />;
+  return <NewsCardNegative />;
+};
+
+```
+
+`useMutation`은 명시적으로 mutate()를 호출해야 실행된다. 그래서 컴포넌트가 마운트되면 useEffect 안에서 수동으로 트리거하고 있었다. 하지만 **감정 분석은 데이터를 변경하는 게 아닌 조회하는 행위**이다. google NLP API에 POST로 보내는 건 맞지만, 그건 HTTP 메서드의 문제였고, React Query에서의 역할은 다른 개념이었다. 그리고 useMutation 사용으로 인해 아래의 문제가 있었다.
+
+- 캐싱이 없어 같은 뉴스 제목으로 분석을 요청해도 매번 API를 호출
+- useEffect를 사용하여 마운트 시점에 수동으로 `mutate()`를 호출 필요
+- 중복 호출을 막기 위해 `mutation.status === 'idle'`와 같은 방어 코드 필요
+
+렌더링 로직도 `renderContent` 함수로 분기 처리를 통해 상태 체크로 useMutation의 한계를 메워가는 구조였다.
+
+```typescript
+// 변경 후
+// hooks/api/sentiment.ts
+
+export const useAnalyzeSentiment = (text: string) => {
+  return useQuery({
+    queryKey: ['sentiment', text],
+    queryFn: () => postAnalyzeSentiment(text),
+    enabled: !!text,
+  });
+};
+
+
+// NewsCard/index.tsx
+
+type CardState = 'loading' | 'visible' | 'hidden';
+
+const cardState: CardState = isLoading ? 'loading' : isVisible ? 'visible' : 'hidden';
+
+const contentMap: Record<CardState, React.ReactNode> = {
+  loading: <NewsCardLoading />,
+  visible: news && <NewsCardContent news={news} isTitleOnly={isTitleOnly} />,
+  hidden: <NewsCardNegative />,
+};
+```
+
+useMutation 대신 `useQuery`를 사용했다. `enabled` 조건이 충족되면 마운트 시 자동으로 fetch하므로 방어 코드도 필요가 없어졌다. 쿼리 키를 통해 동일한 텍스트에 대한 요청은 React Query가 캐싱해서 API를 다시 호출하지 않는다.
+
+컴포넌트도 함수 분기가 아닌 객체 맵으로 처리하도록 했다. 이는 상태 결정과 렌더링이 분리되어 각 의도의 독립적 파악이 가능하며, 상태 추가 시 contentMap에 한 줄만 추가하면 된다. JSX 반환부도 `{contentMap[cartState]}` 한 줄로 깔끔히 유지가 가능하다.
