@@ -72,6 +72,12 @@ export default async function Search({
 
 NewsSearchClient 컴포넌트는 initialData를 useNewsListQuery 훅에 넘기는데, 내부적으로 TanStack Query의 **useInfiniteQuery**가 이 데이터를 첫 번째 페이지의 캐시로 등록한다. 덕분에 하이드레이션 후에도 불필요한 재요청이 발생하지 않는다.
 
+<img src="/image/posts/news-migration/2.png" alt="서버 컴포넌트 적용 전" />
+
+<img src="/image/posts/news-migration/3.png" alt="서버 컴포넌트 적용 후" />
+
+적용 이후 FCP 값이 3.3s에서 2.4s로 약 27%, LCP 값은 17.2s에서 6.2s로 약 64% 개선되었다!
+
 ### route handler
 
 route handler는 v16 업데이트 내용은 아니지만, 파라미터로 key 값을 넘겨줘야 하기 때문에 브라우저에 해당 값이 노출되던 기존 google api 호출 방식의 문제를 해결하기 위해 도입했다.
@@ -127,9 +133,9 @@ export const postAnalyzeSentiment = async (text: string) => {
 
 route handler를 두어 google api 호출을 서버로 옮겼다. API 키는 env 파일에서 읽어오므로 클라이언트에 노출되지 않는다!
 
-<img src="/image/posts/news-migration/2.png" alt="route handler 변경 전" />
+<img src="/image/posts/news-migration/4.png" alt="route handler 변경 전" />
 
-<img src="/image/posts/news-migration/3.png" alt="route handler 변경 후" />
+<img src="/image/posts/news-migration/5.png" alt="route handler 변경 후" />
 
 ```typescript
 // 변경 전 구조
@@ -248,4 +254,68 @@ const contentMap: Record<CardState, React.ReactNode> = {
 
 useMutation 대신 `useQuery`를 사용했다. `enabled` 조건이 충족되면 마운트 시 자동으로 fetch하므로 방어 코드도 필요가 없어졌다. 쿼리 키를 통해 동일한 텍스트에 대한 요청은 React Query가 캐싱해서 API를 다시 호출하지 않는다.
 
-컴포넌트도 함수 분기가 아닌 객체 맵으로 처리하도록 했다. 이는 상태 결정과 렌더링이 분리되어 각 의도의 독립적 파악이 가능하며, 상태 추가 시 contentMap에 한 줄만 추가하면 된다. JSX 반환부도 `{contentMap[cartState]}` 한 줄로 깔끔히 유지가 가능하다.
+컴포넌트도 함수 분기가 아닌 객체 맵으로 처리하도록 했다. 이는 상태 결정과 렌더링이 분리되어 각 의도의 독립적 파악이 가능하며, 상태 추가 시 contentMap에 한 줄만 추가하면 된다. JSX 반환부도 `{contentMap[cardState]}` 한 줄로 깔끔히 유지가 가능하다.
+
+### react-virtuoso
+
+```typescript
+const NewsList = ({ news, filter, hasNextPage, isFetchingNextPage, onLoadMore }: NewsListProps) => {
+  return (
+    <Virtuoso
+      // 브라우저 window 스크롤 기준으로 가상화
+      useWindowScroll
+      // 렌더링할 데이터 배열
+      data={news}
+      // 실제 화면 밖 아래쪽 500px 영역까지 미리 렌더링
+      // endReached 조기 트리거 + 스크롤 버벅임 방지
+      overscan={500}
+      // 마지막 아이템에 도달했을 때 호출 (다음 페이지 fetch)
+      endReached={() => {
+        if (hasNextPage && !isFetchingNextPage) onLoadMore?.();
+      }}
+      className="w-full"
+      // 각 아이템의 렌더링 내용
+      // idx: 인덱스, item: 해당 뉴스 데이터
+      itemContent={(idx, item) => (
+        <div key={`${item.title}-${idx}`} className="pb-2 sm:pb-5">
+          <NewsCard
+            news={item}
+            isTitleOnly={filter.showTitleOnly}
+            isPositiveOnly={filter.showPositiveOnly}
+          />
+        </div>
+      )}
+      components={{
+        // 리스트 맨 하단에 고정으로 렌더링되는 영역 (페이징 중일 때 스피너 표시)
+        Footer: () =>
+          isFetchingNextPage ? (
+            <div className="flex w-full justify-center items-center py-4">
+              <SpinnerIcon className="w-8 h-8 text-indigo-400 animate-spin" style={{ animationDuration: '1.5s' }} />
+            </div>
+          ) : null,
+      }}
+    />
+  );
+};
+```
+
+무한 스크롤 성능 최적화를 위해 `react-virtuoso` 라이브러리를 사용해 가상화를 적용했다.
+
+브라우저 스크롤을 기준으로 가상화하기 위해 **useWindowScroll**을 적용했고, 화면 아래 500px를 미리 렌더링하여 스크롤 버벅임을 방지하고 endReached를 조기 트리거하기 위해 **overscan** 속성을 사용했다.
+
+| components 키         | 역할                                                 |
+| --------------------- | ---------------------------------------------------- |
+| Header                | 리스트 최상단 고정 영역                              |
+| Footer                | 리스트 최하단 고정 영역                              |
+| Item                  | 각 아이템의 wrapper 요소                             |
+| List                  | 전체 아이템을 감싸는 컨테이너                        |
+| ScrollSeekPlaceholder | 빠른 스크롤 중 실제 컴포넌트 대신 보여줄 placeholder |
+| EmptyPlaceholder      | 데이터가 없을 때 렌더링되는 영역                     |
+
+다음 페이지가 로딩 중인 동안엔 isFetchingNextPage 값이 true일 시 Footer에 스피너가 보여지도록 구현했다.
+
+<img src="/image/posts/news-migration/6.png" alt="가상화 적용 전" />
+
+<img src="/image/posts/news-migration/7.png" alt="가상화 적용 후" />
+
+가상화 적용 이전에는 스크롤할수록 DOM 노드가 누적되었지만, 적용 이후에는 스크롤량에 무관하게 DOM 노드 수가 10개 이하로 유지되었다.😊
