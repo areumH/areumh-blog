@@ -39,11 +39,11 @@ export const fetchNewsFirstPage = async (query: string, sort: string): Promise<N
   'use cache'; // 같은 query + sort 조합이면 재요청 없이 캐시 반환
 
   const res = await fetch(
-    `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=20&start=1&sort=${sort}`,
+    `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(query)}&display=${PAGE_ELEMENT}&start=1&sort=${sort}`,
     {
       headers: {
-        'X-Naver-Client-Id': process.env.NEXT_PUBLIC_NAVER_API_CLIENT!,
-        'X-Naver-Client-Secret': process.env.NEXT_PUBLIC_NAVER_API_CLIENT_KEY!,
+        'X-Naver-Client-Id': ENV.NAVER_CLIENT_ID,
+        'X-Naver-Client-Secret': ENV.NAVER_CLIENT_SECRET,
       },
     },
   );
@@ -105,7 +105,7 @@ export async function DELETE() → DELETE /api/sentiment
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const key = process.env.GOOGLE_API_KEY; // 서버에만 존재하는 환경변수
+  const key = ENV.GOOGLE_API_KEY; // 서버에만 존재하는 환경변수
 
   const res = await fetch(`https://language.googleapis.com/v2/documents:analyzeSentiment?key=${key}`, {
     method: 'POST',
@@ -157,17 +157,21 @@ route handler를 두어 google api 호출을 서버로 옮겼다. API 키는 env
     ├── searchParams prop으로 query, sort 수신
     ├── fetchNewsFirstPage() — "use cache"
     │   └── fetch → Naver API 직접 호출
+    │       └── NAVER_API_CLIENT / NAVER_API_CLIENT_KEY (서버에만 존재)
     └── <NewsSearchClient initialData={...} />
 
 브라우저
 └── NewsSearchClient.tsx ('use client')
     ├── useInfiniteQuery() — initialData로 첫 페이지 수신
-    ├── 2페이지~ → axios → /naver-api rewrite → Naver API
+    ├── 2페이지~ → fetch → /api/news (Route Handler)
+    │                         └── fetch → Naver API
+    │                              └── NAVER_API_CLIENT / NAVER_API_CLIENT_KEY (서버에만 존재)
     ├── sort 변경 → router.push → URL 업데이트 → 서버 재렌더
     └── NewsCard
         └── POST /api/sentiment (Route Handler)
             └── fetch → Google API
                 └── GOOGLE_API_KEY (서버에만 존재)
+
 ```
 
 ## proxy.ts
