@@ -1,0 +1,272 @@
+---
+title: vanilla-extract 공부하기
+date: 2026-06-15
+description:
+tags: [vanilla-extract]
+---
+
+## CSS-in-JS
+
+### 등장 배경
+
+과거의 웹 개발에서는 HTML 파일과 CSS 파일이 엄격히 분리되어 있었다. 하지만 프로젝트가 커지면서 기존 CSS 방식(전역 스타일링)의 단점이 드러났다.
+
+- **클래스명 충돌** : 스타일이 전역으로 적용되어 클래스명이 겹쳐 스타일이 덮어씌워짐
+- **유지보수의 어려움** : 스타일이 어디에 쓰이고 있는지 파악이 어려워 코드가 쌓임
+
+위의 문제를 해결하기 위해 스타일을 자바스크립트 컴포넌트 안에 함께 관리하자는 취지로 `CSS-in-JS`가 등장했다. (ex. Styled-components, Emotion)
+
+### 장점
+
+- **로컬 스코프** : 고유한 해시값으로 클래스명을 자동 생성하여 개발자가 중복을 걱정하며 이름을 지을 필요가 없어짐
+- **동적 스타일링** : 컴포넌트의 상태나 props를 CSS 안으로 끌고 와 조건에 따라 스타일링이 가능
+- **컴포넌트 중심 개발** : 컴포넌트를 삭제하면 스타일도 함께 삭제되기 때문에 CSS 코드가 남지 않아 관리가 용이
+
+### 한계점
+
+- **JS 번들 사이즈 증가** : 스타일을 파싱, 계산하고 DOM에 주입하는 역할을 하는 자바스크립트 엔진이 추가되기 때문에 초기 로드 시 사용자가 다운로드해야하는 JS 번들 용량이 늘어남
+- **런타임 오버헤드** : CSS-in-JS는 브라우저(런타임)에서 자바스크립트가 실행될 때 스타일 코드를 해석하고 `<style>` 태그를 만들어 DOM에 삽입 - 유저가 페이지를 렌더링할 때마다 계산 비용이 발생하므로, 복잡한 앱일수록 렌덜이 속도가 느려짐
+- **SSR과 RSC** : 서버에서는 자바스크립트 런타임 상태를 사용하기 어려운데, 기존 CSS-in-JS 도구들은 이와 충돌이 잦아 설정이 까다로워짐
+
+## vanilla-extract
+
+### 장점
+
+- **Zero-Runtime** : 자바스크립트가 브라우저에서 계산을 하지 않음 - 빌드 시점에 모든 스타일이 완벽한 정적 CSS 파일로 추출되므로, 렌더링 속도가 빠르고 브라우저 캐싱의 이점을 누릴 수 있음
+- **타입 안정성** : 오타가 나거나 테마 변수를 잘못 입력할 경우 빌드 에러를 띄우기 때문에 개발 과정에서 실수가 줄어듦
+- **디자인 시스템 최적화** : 컴포넌트의 상태(variant)를 관리하는 `recipe` 기능이 내장되어 있어, 일관된 디자인 시스템을 구축하고 유지보수하기에 최적화
+
+### 빌드 플로우
+
+**1. 번들러 플러그인의 개입**
+
+- 프로젝트 빌드 시 Next.js나 Vite 등에 설정된 vanilla-extract 플러그인이 동작한다.
+- 번들러가 모듈을 분석하는 과정에서 import된 `.css.ts` 파일을 찾아 처리한다.
+
+**2. 빌드 타임에 .css.ts 코드 평가**
+
+- 플러그인은 `.css.ts` 파일을 브라우저가 아닌 빌드 환경에서 미리 평가한다.
+- 이때 `style`, `recipe`, `globalStyle` 등으로 작성한 스타일 정의가 실행된다.
+- 그 결과 어떤 CSS 속성과 클래스 조합이 필요한지 파악한다.
+
+**3. CSS 변환 및 정적 파일 추출**
+
+- vanilla-extract는 스타일 정의를 실제 CSS 문법으로 변환한다.
+- 동시에 충돌을 방지하기 위해 해시 기반의 고유 클래스명을 생성한다. (ex. `.button_d6y21`)
+- 변환된 CSS는 JavaScript 코드 안에 남지 않고 별도의 정적 `.css` 파일로 추출된다.
+
+**4. JavaScript 코드에는 클래스명 참조만 남김**
+
+- 빌드 후 컴포넌트 코드에서는 스타일 객체 자체가 아니라 생성된 클래스명을 사용하게 된다.
+- 그래서 브라우저에서는 스타일 계산을 다시 하지 않고, 미리 생성된 CSS 파일과 클래스명만 사용한다.
+
+**5. 단, recipe는 최소한의 런타임 로직이 남을 수 있음**
+
+- `style()`은 보통 클래스명 문자열만 남는다.
+- 하지만 `recipe()`처럼 variant에 따라 클래스를 조합해야 하는 경우에는, 선택한 variant에 맞는 클래스명을 반환하는 작은 함수 로직이 런타임에 남을 수 있다.
+- 그래도 CSS 생성 자체는 빌드 타임에 끝난다.
+
+---
+
+```ts
+// 예시 스타일 정의 - Button.css.ts
+
+import { style, createVar, fallback } from '@vanilla-extract/css';
+import { recipe } from '@vanilla-extract/recipes';
+
+// 1. createVar: 런타임에 동적으로 바뀔 값을 담을 'CSS 변수 이름표' 생성
+export const buttonBackgroundVar = createVar();
+
+// 2. style & fallback: 기본적인 CSS 뼈대
+const baseButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  cursor: 'pointer',
+  border: 'none',
+  borderRadius: '8px',
+  color: 'white',
+
+  // fallback: CSS 변수가 없으면 기본 색상 사용
+  backgroundColor: fallback(buttonBackgroundVar, '#2563eb'),
+});
+
+// 3. recipe: 디자인 시스템의 핵심, 조건부 스타일(Variants) 관리
+export const buttonStyle = recipe({
+  base: baseButton, // baseButton 스타일을 상속받음
+  variants: {
+    size: {
+      small: {
+        padding: '8px 12px',
+        fontSize: '14px',
+      },
+      large: {
+        padding: '16px 24px',
+        fontSize: '18px',
+      },
+    },
+  },
+
+  defaultVariants: {
+    size: 'small',
+  },
+});
+```
+
+```ts
+// 예시 컴포넌트 - Button.tsx
+
+import { assignInlineVars } from '@vanilla-extract/dynamic';
+import { buttonStyle, buttonBackgroundVar } from './Button.css';
+
+interface ButtonProps {
+  size?: 'small' | 'large';
+  backgroundColor?: string;
+  children: React.ReactNode;
+}
+
+export const Button = ({
+  size,
+  backgroundColor,
+  children,
+}: ButtonProps) => {
+  return (
+    <button
+      // recipe를 호출해 조건에 맞는 클래스명을 반환받음
+      className={buttonStyle({ size })}
+
+      // assignInlineVars: 동적인 값을 vanilla-extract 변수에 안전하게 주입
+      style={assignInlineVars({
+        [buttonBackgroundVar]: backgroundColor,
+      })}
+    >
+      {children}
+    </button>
+  );
+};
+```
+
+### style()
+
+```ts
+const baseButton = style({
+  display: 'inline-flex',
+  alignItems: 'center',
+  cursor: 'pointer',
+  border: 'none',
+  borderRadius: '8px',
+  color: 'white',
+
+  backgroundColor: fallback(buttonBackgroundVar, '#2563eb'),
+});
+```
+
+`style`은 **하나의 CSS 클래스를 생성하는 API**다. 위의 코드는 버튼이 공통으로 가져야 하는 스타일 정의이다. 버튼의 크기, 상태와 관계없이 항상 적용되는 기본 스타일이다.
+
+vanilla-extract는 위 객체를 빌드 타임에 CSS로 변환하고, 고유한 클래스명을 생성한다.
+
+### createVar()
+
+```ts
+export const buttonBackgroundVar = createVar();
+```
+
+`createVar`는 vanilla-extract에서 사용할 **CSS 변수를 생성하는 API**이다. 위의 `buttonBackgroundVar`는 버튼의 배경색을 외부에서 동적으로 변경할 수 있도록 하는 변수이다.
+
+이는 **나중에 값을 넣을 수 있는 CSS 변수 자리**를 만들어 두는 역할을 한다. 해시가 포함된 고유한 이름으로 생성되기 때문에, 다른 CSS 변수와 이름이 충돌할 가능성을 줄일 수 있다.
+
+### fallbackVar()
+
+```ts
+backgroundColor: fallbackVar(buttonBackgroundVar, '#2563eb'),
+```
+
+`fallbackVar`는 **CSS 변수에 값이 없을 때 사용할 기본값을 지칭하는 API**이다. 버튼에 `buttonBackgroundVar` 값이 주입되어 있으면 그 값을 사용하고, 값이 없으면 `'#2563eb'` 값을 사용한다는 의미이다.
+
+```ts
+// fallback 값인 "#2563eb" 사용
+<Button>기본 버튼</Button>
+
+// 외부에서 색상을 전달하므로 "#ef4444" 사용
+<Button backgroundColor="#ef4444">
+  삭제하기
+</Button>
+```
+
+이처럼 `createVar`와 `fallbackVar`를 함께 사용하면 기본 스타일은 정적으로 유지하면서, 필요한 값만 런타임에 변경할 수 있다.
+
+### recipe()
+
+```ts
+export const buttonStyle = recipe({
+  base: baseButton,
+  variants: {
+    size: {
+      small: {
+        padding: '8px 12px',
+        fontSize: '14px',
+      },
+      large: {
+        padding: '16px 24px',
+        fontSize: '18px',
+      },
+    },
+  },
+
+  defaultVariants: {
+    size: 'small',
+  },
+});
+```
+
+`recipe`는 **여러 variant를 가진 컴포넌트 스타일을 관리**할 때 사용한다. 버튼 컴포넌트는 `size`처럼 정해진 선택지에 따라 스타일이 달라질 수 있다.
+
+```ts
+size: {
+  small: {
+    padding: '8px 12px',
+    fontSize: '14px',
+  },
+  large: {
+    padding: '16px 24px',
+    fontSize: '18px',
+  },
+},
+```
+
+`size` variant는 버튼의 크기를 제어하기 위한 옵션이다. `small`과 `large` 값을 가지며, 선택된 값에 따라 padding과 font-size가 달라진다.
+
+```ts
+base: baseButton,
+```
+
+`recipe`의 `base`에는 앞에서 만든 baseButon을 연결한다. 즉, 모든 버튼은 기본적으로 baseButton 스타일을 가지고, 그 위에 size variant 스타일이 추가되는 구조이다.
+
+`defaultVariants`는 컴포넌트 사용자가 매번 모든 variant 값을 넘기지 않아도 일관된 기본 스타일을 유지할 수 있도록 **특정 variant 값이 전달되지 않았을 때 사용할 기본값을 정의**한다.
+
+### assignInlineVars()
+
+```ts
+style={assignInlineVars({
+  [buttonBackgroundVar]: backgroundColor,
+})}
+```
+
+`assignInlineVars`는 **`createVar`로 만든 CSS 변수에 런타임 값을 주입**할 때 사용한다. 위의 코드에선 Button 컴포넌트가 `backgroundColor` prop을 받으면, 그 값을 `buttonBackgroundVar`에 연결한다.
+
+```ts
+<Button>기본 버튼</Button>
+```
+
+backgroundColor를 전달하지 않으면 `assignInlineVars`에서 주입할 값이 없기 때문에 `buttonBackgroundVar`는 inline style에 추가되지 않는다. 그러면 CSS 변수 값이 없으므로 fallback 값인 `'#2563eb'`가 적용된다.
+
+정리하면, `fallbackVar`는 **값이 없을 때 사용할 기본값을 CSS에 정의**하고, `assignInlineVars`는 **값이 있을 때 그 기본값을 덮어쓸 런타임 값**을 주입한다.
+
+## 정리
+
+| API                  | 역할                              | 실행 시점            |
+| -------------------- | --------------------------------- | -------------------- |
+| `createVar()`        | 고유한 CSS 변수 이름 생성         | 빌드 타임            |
+| `fallback()`         | CSS 변수 값이 없을 때 기본값 지정 | 브라우저 CSS 계산 시 |
+| `assignInlineVars()` | 런타임에서 CSS 변수에 값 할당     | 런타임               |
+| `recipe()`           | variant에 맞는 클래스명 조합      | 런타임               |
+| `style()`            | 정적 CSS 클래스 생성              | 빌드 타임            |
