@@ -1,0 +1,254 @@
+---
+title: 스타일 우선순위 공부하기
+date: 2026-06-28
+description:
+tags: [vanilla-extract]
+---
+
+디자인 시스템을 구현하면서, 공통으로 사용되는 label `recipe` 위에 컴포넌트 전용 텍스트 라벨 스타일을 덮어씌워야 하는 상황에서 스타일의 우선순위가 충돌하는 문제가 발생했다.
+
+```js
+// [수정 전] 공통 유틸 label
+export const label = recipe({
+  base: {
+    display: 'flex',
+    alignItems: 'center',
+    // ❌ 기본 색상을 직접 할당
+    color: vars.color.semantic.object.bold,
+  },
+});
+
+// [수정 전] 체크박스 텍스트 라벨
+export const checkboxTextLabel = style({
+  whiteSpace: 'nowrap',
+  // ❌ 기본 색상을 덮어쓰기 위해 새로운 색상 할당 시도
+  color: vars.color.semantic.object.bolder,
+});
+```
+
+로컬 환경에서는 `checkboxTextLabel`의 색상이 정상적으로 적용되는 것처럼 보였지만, 버그가 언제 터질지 모르는 불안정한 상태였다.
+
+## CSS 스타일 명시도
+
+브라우저는 여러 CSS 규칙이 하나의 요소에 중첩될 때 **명시도**(Specificity)라는 점수 체계를 사용하여 최종적으로 적용할 스타일을 결정한다.
+
+명시도는 세 개의 열(Column)로 이루어진 (ID, Class, Element) 형태로 계산된다. 왼쪽 자릿수의 점수가 하나라도 높다면 하위 자릿수의 점수가 아무리 높아도 이길 수 없는 압도적인 우선순위를 가진다.
+
+> - **ID 선택자** (#id): (1, 0, 0)의 명시도 - 가장 강력
+> - **클래스/속성/가상클래스** (.class, [type="text"], :hover): (0, 1, 0)의 명시도
+> - **태그/가상요소** (div, ::before): (0, 0, 1)의 명시도 - 가장 약함
+
+명시도 점수가 동일한 동점 상황일 경우, 최종 CSS 번들 파일 내에서 가장 나중에 선언된(아래에 위치한) 규칙이 승리하게 된다 (**Cascade**)
+
+```ts
+<!-- 예시를 위한 HTML 구조 -->
+<div id="container">
+  <!-- btn과 primary-btn 클래스를 동시에 가지고, data-active 속성도 있는 버튼 -->
+  <button class="btn primary-btn" data-active="true">클릭</button>
+</div>
+```
+
+```ts
+/* 1. 요소 선택자 (3열) */
+button {
+  color: black;
+}
+/* 점수: (0, 0, 1) - 요소 1개 */
+
+
+/* 2. 클래스 선택자 (2열) */
+.btn {
+  color: blue;
+}
+/* 점수: (0, 1, 0) - 클래스 1개 */
+/* 💡 (0,0,1)보다 높으므로 버튼은 파란색이 된다. */
+
+
+/* 3. 클래스 + 속성 선택자 조합 (2열 중첩) */
+.btn[data-active="true"] {
+  color: green;
+}
+/* 점수: (0, 2, 0) - 클래스 1개 + 속성 1개 */
+/* 💡 속성 선택자가 추가되어 2열 점수가 높아졌다. 버튼은 초록색이 된다. */
+
+
+/* 4. ID + 요소 조합 (1열 포함) */
+#container button {
+  color: red;
+}
+/* 점수: (1, 0, 1) - ID 1개 + 요소 1개 */
+/* 💡 1열(ID)의 점수가 가장 강력하므로, 2열 점수가 아무리 높아도 최종적으로 버튼은 빨간색이 된다. */
+
+
+/* 5. 완전히 동일한 명시도 (동점 상황) */
+.btn {
+  color: blue;
+} /* 점수: (0, 1, 0) */
+
+.primary-btn {
+  color: purple;
+} /* 점수: (0, 1, 0) */
+/* 💡 명시도가 완벽히 같을 경우, CSS 코드의 '가장 마지막에 작성된(Cascade)' 규칙이 승리한다. */
+```
+
+참고) [MDN - CSS 명시도](https://developer.mozilla.org/ko/docs/Web/CSS/Guides/Cascade/Specificity)
+
+---
+
+처음에 언급한 코드를 명시도 관점에서 분석하면 버그의 원인이 명확해진다.
+
+- 공통 `label` **recipe**의 base 클래스 -> **클래스 1개 = (0, 1, 0)**
+- `checkboxTextLabel` 스타일 클래스 -> **클래스 1개 = (0, 1, 0)**
+
+두 스타일 모두 단일 클래스로 구성되어 있어 (0, 1, 0)으로 명시도가 동일하다. `clsx(label(), checkboxTextLabel)` 처럼 자바스크립트 단에서 결합하는 순서는 브라우저의 렌더링 우선 순위에 아무런 영향을 주지 못한다. 두 스타일 중 승자는 오직 **빌드된 CSS 파일에 코드가 등장하는 순서**로 결정된다. 로컬에서는 우연히 `checkboxTextLabel`이 뒤에 번들링되어 정상 동작했을지 모르나, 배포 환경이나 import 순서, 코드 스플리팅 경계가 바뀌면 언제는 색상이 뒤집힐 수 있다.
+
+## 1차 개선 - createVar()
+
+속성을 직접 덮어쓰는 것이 위험하다는 것을 인지하고, CSS 변수 `createVar`를 도입하여 제어권을 역전시키는 개선을 진행했다.
+
+```js
+export const labelColorVar = createVar();
+
+// [1차 개선] 공통 유틸 label
+export const label = recipe({
+  base: {
+    display: 'flex',
+    alignItems: 'center',
+    color: labelColorVar, // 실제 색상은 변수를 참조
+    vars: {
+      // ❌ 기본값을 변수에 "할당(대입)"함
+      [labelColorVar]: vars.color.semantic.object.bold,
+    },
+  },
+});
+
+// [1차 개선] 체크박스 텍스트 라벨
+export const checkboxTextLabel = style({
+  whiteSpace: 'nowrap',
+  vars: {
+    // ❌ 덮어쓸 색상도 변수에 "할당(대입)"함
+    [labelColorVar]: vars.color.semantic.object.bolder,
+  },
+});
+```
+
+`color` 속성 자체의 충돌은 막았지만, 컴파일된 CSS를 보면 근본적인 원인은 해결되지 않았음을 알 수 있다.
+
+```js
+/* 1차 개선 후 컴파일된 CSS 결과 */
+.typography-base {
+  color: var(--labelColorVar);
+  --labelColorVar: <bold>;    /* 👈 명시도 (0,1,0)으로 변수 할당 시도 */
+}
+.checkbox-text-label {
+  --labelColorVar: <bolder>;  /* 👈 명시도 (0,1,0)으로 변수 할당 시도 (동점) */
+}
+```
+
+충돌의 지점이 `color` 속성에서 `--labelColorVar` 변수 할당으로 옮겨갔을 뿐이다. 같은 DOM 요소 안에서 두 클래스가 동일한 변수에 값을 대입하려고 경쟁하고 있고, 명시도 역시 (0, 1, 0)으로 여전히 동점이다.
+
+## 2차 개선 - fallbackVar()
+
+문제의 핵심은 같은 엘리먼트에서 변수에 값을 대입하는 주체가 둘이라는 점이었다. 경쟁자를 하나로 줄여 명시도 동점 자체를 없애기 위해 `fallbackVar`를 도입했다.
+
+```js
+import { createVar, fallbackVar, style } from '@vanilla-extract/css';
+
+export const labelColorVar = createVar();
+
+// [최종 해결] 공통 유틸 label
+export const label = recipe({
+  base: {
+    display: 'flex',
+    alignItems: 'center',
+    // ✅ 변수 할당(vars 블록)을 완전히 제거하고, 변수가 없을 때 쓸 예비값을 fallbackVar로 선언
+    color: fallbackVar(labelColorVar, vars.color.semantic.object.bold),
+  },
+});
+
+// [최종 해결] 체크박스 텍스트 라벨
+export const checkboxTextLabel = style({
+  whiteSpace: 'nowrap',
+  vars: {
+    // ✅ 유일하게 변수에 값을 할당하는 주체
+    [labelColorVar]: vars.color.semantic.object.bolder,
+  },
+});
+```
+
+```js
+/* 최종 해결 후 컴파일된 CSS 결과 */
+.typography-base {
+  /* 변수 할당 선언이 사라짐. 주입된 값이 없으면 <bold>를 사용 */
+  color: var(--labelColorVar, <bold>);
+}
+.checkbox-text-label {
+  /* 유일한 변수 할당자 */
+  --labelColorVar: <bolder>;
+}
+```
+
+컴파일된 CSS의 모습은 위와 같다. `base` 스타일에서는 변수에 값을 넣으려는 시도 자체를 하지 않는다. 해당 엘리먼트에서 `--labelColorVar` 변수에 값을 주입하는 클래스는 `.checkbox-text-label` 단 하나뿐이다.
+
+경쟁자가 사라졌으므로 명시도를 비교할 필요조차 없어졌다. 번들링 순서가 어떻게 바뀌든, 개발 환경과 배포 환경에 어떻게 다르든 무조건 체크박스의 색상이 안전하게 덮어써지는 안정적인 구조가 되었다!
+
+## CSS @layer
+
+트러블슈팅 과정에서 `fallbackVar`를 통한 해결 외에도, 근본적인 개선안으로 CSS `@layer` API의 도입도 논의되었다.
+
+CSS `@layer`는 명시도(specificity) 점수나 코드의 선언 순서(Cascade)와 무관하게 스타일의 우선순위를 **개발자가 명시적으로 그룹화하여 제어**할 수 있는 기능이다. 위의 명시도 충돌 문제는 점수가 같았기 때문에 발생햇다. 하지만 `@layer`를 사용하면 디자인 시스템의 기본 스타일과 이를 가져다 쓰는 소비자의 덮어쓰기 스타일을 완전히 다른 차원으로 분리할 수 있다. **레이어 밖에 선언된 스타일은 레이어 안쪽에 선언된 스타일보다 명시도가 낮더라도 무조건 우선하여 적용된다.**
+
+vanilla-extract도 `@layer` API를 지원한다. 만약 이 방식을 적용한다면 아래와 같이 구현할 수 있다.
+
+```ts
+import { layer, style } from '@vanilla-extract/css';
+import { recipe } from '@vanilla-extract/recipes';
+
+// 1. 디자인 시스템 기본(Base) 레이어 생성
+export const dsBaseLayer = layer('dsBase');
+
+// 2. 공통 유틸 label (dsBase 레이어에 종속시킴)
+export const label = recipe({
+  base: style({
+    '@layer': {
+      [dsBaseLayer]: {
+        display: 'flex',
+        alignItems: 'center',
+        color: vars.color.semantic.object.bold, // 기본 색상 직접 할당
+      },
+    },
+  }),
+});
+
+// 3. 체크박스 텍스트 라벨 (레이어에 넣지 않음 = Unlayered)
+export const checkboxTextLabel = style({
+  whiteSpace: 'nowrap',
+  color: vars.color.semantic.object.bolder, // 덮어쓸 색상 직접 할당
+});
+```
+
+위 코드가 컴파일된 CSS 결과는 아래와 같이 동작하며, 소비자는 CSS 변수를 조작할 필요 없이 직관적으로 `color` 속성을 덮어쓸 수 있다.
+
+```ts
+/* dsBase 레이어 안의 스타일 */
+@layer dsBase {
+  .typography-base {
+    color: <bold>; /* 명시도: (0, 1, 0) */
+  }
+}
+
+/* 레이어 밖의 스타일 (Unlayered) */
+.checkbox-text-label {
+  color: <bolder>; /* 명시도: (0, 1, 0) */
+}
+
+/* 💡 Unlayered(레이어 밖) 스타일은 Layer 안의 스타일보다 무조건 우선 */
+/* 따라서 명시도나 선언 순서(우연)를 따질 필요 없이, 무조건 <bolder>가 완벽하게 승리한다. */
+```
+
+구조적으로 가장 안전해보이는 해결책임에도 불구하고 현 시점에서 도입을 보류하고 `fallbackVar`를 선택한 이유는 다음과 같다.
+
+- **빌드 불안전성**: 현재 빌드 환경에서 `@layer` 선언이 불안정하게 추적되거나 순서가 꼬이는 이슈([#1112](https://github.com/vanilla-extract-css/vanilla-extract/issues/1112))가 존재한다.
+- **높은 사이드 이펙트 위험도**: `label` 컴포넌트는 디자인 시스템 전반에서 광범위하게 사용되는 요소이다. 불안정이 내재된 기능을 이에 적용할 경우, 프로덕트 전체 빌드 결과물에 어떤 연쇄적인 스타일 깨짐을 유발할 지 예측하지 힘들다.
+
+현재 상황에서는 기존 시스템과 API에 전혀 영향을 주지 않으면서 번들 순서 의존성이라는 버그를 차단할 수 있는 `fallbackVar` 방식이 가장 합리적이었다. `@layer` 도입은 라이브러리 이슈가 안정화되고, 장기적인 디자인 시스템 아키텍처 개편이 이루어질 때 다시 검토하기로 했다! 👍
