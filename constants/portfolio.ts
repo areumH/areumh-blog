@@ -1,7 +1,5 @@
 export const PORTFOLIO_INFO = {
   name: '한아름',
-  about:
-    '문제를 정의하고 해결하는 과정에서 큰 동기부여를 얻는 신입 프론트엔드 개발자입니다. \n사용자가 직접 체감할 수 있는 변화를 만드는 일을 좋아하며, 직관적이고 유지보수하기 쉬운 코드를 통해 더 나은 경험을 제공하는 데에 가치를 둡니다. 작은 개선이라도 꾸준히 쌓아 팀과 서비스 모두에게 긍정적인 영향을 주는 개발자가 되고자 합니다. ',
   education: {
     school: '한국교통대학교 소프트웨어학전공 졸업 (3.73 / 4.5)',
     date: '2024.02',
@@ -23,9 +21,15 @@ export const PORTFOLIO_INFO = {
   skills: {
     frontend: ['React', 'Next.js', 'TypeScript', 'JavaScript'],
     state: ['Zustand', 'Redux', 'Tanstack Query'],
-    styling: ['Tailwind CSS', 'Styled-Component'],
+    styling: ['Tailwind CSS', 'Styled-Component', 'Emotion', 'Vanilla-extract'],
   },
   activities: [
+    {
+      name: 'JECT',
+      date: '2026.05 ~ ',
+      link: 'https://ject.kr/',
+      description: 'IT 사이드 프로젝트 동아리 JECT 메이커스 2팀',
+    },
     {
       name: '항해99',
       date: '2025.07 ~ 2025.09',

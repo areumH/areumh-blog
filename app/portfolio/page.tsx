@@ -35,12 +35,6 @@ export default function Portfolio() {
       <div className="flex w-full">
         <p className="text-2xl md:text-4xl">{PORTFOLIO_INFO.name}</p>
       </div>
-      <div className="flex flex-col gap-2 md:gap-3">
-        <div className="flex text-2xl md:text-3xl font-bold">About</div>
-        <p className="text-sm md:text-base text-gray-600 dark:text-gray-400 whitespace-pre-line">
-          {PORTFOLIO_INFO.about}
-        </p>
-      </div>
       <div className="flex flex-col gap-2 md:gap-3 w-full">
         <div className="flex text-2xl md:text-3xl font-bold">Education</div>
         <div className="flex justify-between w-full gap-5 rounded-lg px-4 py-3 border border-gray-300 dark:border-gray-700">
@@ -91,7 +85,7 @@ export default function Portfolio() {
         <div className="flex text-2xl md:text-3xl font-bold">Activities</div>
         {PORTFOLIO_INFO.activities.map((el) => (
           <div
-            key={el.name}
+            key={el.description}
             className="flex flex-col w-full gap-2 rounded-lg px-4 py-3 border border-gray-300 dark:border-gray-700"
           >
             <div className="flex justify-between w-full">
