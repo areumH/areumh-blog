@@ -2,6 +2,8 @@ import { FaGithub, FaLinkedin } from 'react-icons/fa';
 import { SiVelog } from 'react-icons/si';
 
 export default function Footer() {
+  const currentYear = new Date().getFullYear();
+
   return (
     <footer className="w-full flex flex-col items-center py-6 gap-4 md:gap-5">
       <div className="flex gap-7 items-center">
@@ -13,13 +15,13 @@ export default function Footer() {
           target="_blank"
           rel="noopener noreferrer"
         >
-          <FaLinkedin className="w-5 h-5 md:w-6 md:h-6"/>
+          <FaLinkedin className="w-5 h-5 md:w-6 md:h-6" />
         </a>
         <a href="https://velog.io/@areumh__9/posts" target="_blank" rel="noopener noreferrer">
-          <SiVelog className="w-4 h-4 md:w-5 md:h-5"/>
+          <SiVelog className="w-4 h-4 md:w-5 md:h-5" />
         </a>
       </div>
-      <p className="text-xs md:text-sm">© 2025 한아름.</p>
+      <p className="text-xs md:text-sm">© {currentYear} 한아름.</p>
     </footer>
   );
 }
